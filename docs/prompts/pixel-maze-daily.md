@@ -2,6 +2,9 @@
 
 将下文整体作为对 AI 或工程实现的**规格说明**。目标：浏览器内可运行的**像素风**迷宫游戏，**每日种子**生成可复现的**七关递进迷宫**，记录**最少步数**并维护**排行榜**（优先本地，可扩展服务端）。
 
+**业务逻辑扩写版（用户旅程、状态机、数据模型）见：** [BUSINESS-LOGIC.md](../pixel-maze/BUSINESS-LOGIC.md)  
+**给 Cursor / Trae 生成单页原型的可复制提示词见：** [pixel-maze-ide-prototype.md](pixel-maze-ide-prototype.md)
+
 ---
 
 ## 一、产品定义
