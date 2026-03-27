@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <title>PixelNoise v3</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ===== DESIGN TOKENS ===== */
+      :root {
+        --oak: #8b7355;
+        --oak-hi: #a08868;
+        --oak-sh: #5c4d38;
+        --diamond: #6b8e9f;
+        --diamond-hi: #85aabd;
+        --diamond-sh: #4a6b7a;
+        --lava: #e8833a;
+        --lava-hi: #f09a52;
+        --lava-sh: #c06828;
+        --coal: #2d2d2d;
+        --white: #f0f0f0;
+        --bg-day: #c6c6c6;
+        --bg-night: #5c8c58;
+        --bg-deep: #2c3e50;
+        --hi: rgba(255, 255, 255, 0.28);
+        --sh: rgba(0, 0, 0, 0.28);
+        --panel: rgba(0, 0, 0, 0.18);
+        --panel-dark: rgba(0, 0, 0, 0.52);
+        --bg: var(--bg-day);
+        --text: #1a1a1a;
+      }
+      [data-theme="night"] {
+        --bg: var(--bg-night);
+        --text: #e8e8d0;
+      }
+
+      /* ===== GLOBAL ===== */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        image-rendering: pixelated;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "VT323", monospace;
+        font-size: 20px;
+        color: var(--text);
+        background: var(--bg);
+        transition: background 0.5s steps(8);
+      }
+
+      /* ===== PIXEL BUTTON BASE ===== */
+      .pb {
+        background: var(--oak);
+        border: 2px solid var(--coal);
+        box-shadow:
+          inset 0 1px 0 var(--hi),
+          inset 0 -2px 0 var(--sh),
+          2px 2px 0 rgba(0, 0, 0, 0.3);
+        color: var(--white);
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        transition:
+          transform 60ms steps(1),
+          box-shadow 60ms steps(1);
+      }
+      .pb:active,
+      .pb.dn {
+        transform: translate(2px, 2px);
+        box-shadow:
+          inset 0 2px 0 var(--sh),
+          inset 0 -1px 0 var(--hi),
+          0 0 0 rgba(0, 0, 0, 0);
+      }
+      .pb.sel {
+        background: var(--diamond);
+        box-shadow:
+          inset 0 2px 0 var(--sh),
+          inset 0 -1px 0 var(--hi),
+          2px 2px 0 rgba(0, 0, 0, 0.3);
+      }
+      .pb.acc {
+        background: var(--lava);
+      }
+      .pb.acc:active,
+      .pb.acc.dn {
+        background: var(--lava-sh);
+      }
+
+      /* ===== APP SHELL ===== */
+      .app {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+      }
+      .spacer {
+        height: max(env(safe-area-inset-top), 18px);
+        flex-shrink: 0;
+      }
+
+      /* ===== TITLE BAR ===== */
+      .tbar {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        flex-shrink: 0;
+        z-index: 30;
+        gap: 8px;
+      }
+      .logo {
+        font-family: "Press Start 2P", monospace;
+        font-size: 13px;
+        color: var(--text);
+        letter-spacing: 1px;
+        flex: 1;
+      }
+      .tbar .pb {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+      }
+
+      /* ===== SCENE AREA ===== */
+      .scene {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #scene-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* 播放/暂停浮动按钮 */
+      .play-fab {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 64px;
+        height: 64px;
+        font-size: 26px;
+        z-index: 20;
+        border-radius: 0;
+      }
+
+      /* ===== SOUND GRID ===== */
+      .sstrip {
+        flex-shrink: 0;
+        height: 112px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        background: var(--panel);
+        border-top: 2px solid var(--coal);
+        z-index: 20;
+      }
+      .sstrip::-webkit-scrollbar {
+        display: none;
+      }
+
+      .scell {
+        flex-shrink: 0;
+        width: 80px;
+        height: 92px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        position: relative;
+        padding: 0;
+        font-size: 13px;
+        font-family: "VT323", monospace;
+      }
+      .scell .ico {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 4px;
+      }
+      .scell .lbl {
+        width: 100%;
+        text-align: center;
+        padding: 2px 0;
+        background: rgba(0, 0, 0, 0.4);
+        color: #fff;
+        font-size: 15px;
+        line-height: 1.1;
+      }
+      .scell .badge {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 14px;
+        height: 14px;
+        background: var(--lava);
+        border: 2px solid var(--coal);
+        font-size: 10px;
+        line-height: 10px;
+        color: #fff;
+        text-align: center;
+        display: none;
+        font-family: "Press Start 2P";
+      }
+      .scell.sel .badge {
+        display: block;
+      }
+      /* 混音模式下多选角标 */
+      .scell.mix-on .badge {
+        background: var(--diamond);
+        display: block;
+      }
+
+      /* ===== CONTROL BAR ===== */
+      .cbar {
+        flex-shrink: 0;
+        height: 96px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 8px 16px;
+        background: var(--panel);
+        border-top: 2px solid var(--coal);
+        z-index: 20;
+      }
+      .cbar .pb {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+      }
+      .pb.sm {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+        font-family: "Press Start 2P";
+      }
+
+      /* 像素滑块 */
+      .sbox {
+        flex: 1;
+        max-width: 260px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .strk {
+        position: relative;
+        flex: 1;
+        height: 8px;
+        background: var(--oak);
+        border: 2px solid var(--coal);
+        cursor: pointer;
+        min-width: 80px;
+      }
+      .sfill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: var(--diamond);
+        transition: width 0.05s steps(2);
+      }
+      .sthumb {
+        position: absolute;
+        top: 50%;
+        width: 16px;
+        height: 24px;
+        background: var(--diamond);
+        border: 2px solid var(--coal);
+        transform: translate(-50%, -50%);
+        cursor: ew-resize;
+      }
+      .sthumb::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 3px;
+        bottom: 3px;
+        width: 2px;
+        background: rgba(255, 255, 255, 0.5);
+        transform: translateX(-50%);
+      }
+      .sthumb.drag {
+        background: var(--lava);
+        width: 20px;
+      }
+      .vlbl {
+        font-size: 22px;
+        min-width: 38px;
+        text-align: right;
+        font-family: "VT323";
+      }
+
+      /* ===== PIXEL DISSOLVE OVERLAY ===== */
+      .dissolve {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.04s;
+      }
+      .dissolve.on {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #dcanvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ===== MENU PANEL ===== */
+      .mpanel {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: none;
+        background: rgba(0, 0, 0, 0.7);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+      .mpanel.on {
+        display: flex;
+      }
+      .mpanel .pb {
+        width: 220px;
+        height: 48px;
+        font-family: "VT323";
+        font-size: 22px;
+      }
+
+      /* ===== MIX INDICATOR (上方淡入) ===== */
+      .mix-bar {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--panel-dark);
+        border: 2px solid var(--coal);
+        padding: 4px 12px;
+        font-size: 16px;
+        color: #fff;
+        white-space: nowrap;
+        z-index: 25;
+        display: none;
+        gap: 8px;
+        align-items: center;
+      }
+      .mix-bar.on {
+        display: flex;
+      }
+
+      /* ===== TIMER LABEL ===== */
+      .timer-lbl {
+        font-family: "VT323";
+        font-size: 18px;
+        line-height: 1.1;
+        text-align: center;
+      }
+
+      /* ========= LANDSCAPE LAYOUT ========= */
+      @media (orientation: landscape) and(max-height:520px) {
+        .tbar {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          background: transparent;
+          z-index: 31;
+        }
+        .scene {
+          position: absolute;
+          inset: 0;
+        }
+        .sstrip {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 60px;
+          width: 96px;
+          flex-direction: column;
+          height: auto;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 56px 8px 8px;
+          border-top: none;
+          border-right: 2px solid var(--coal);
+          transform: translateX(-100%);
+          transition: transform 0.25s steps(5);
+        }
+        .sstrip.ls-open {
+          transform: translateX(0);
+        }
+        .sstrip .scell {
+          width: 76px;
+          height: 72px;
+        }
+        .ls-hint {
+          display: flex !important;
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 8px;
+          height: 80px;
+          background: var(--diamond);
+          border-right: 2px solid var(--coal);
+          cursor: pointer;
+          z-index: 22;
+          align-items: center;
+          justify-content: center;
+          writing-mode: vertical-rl;
+          font-size: 11px;
+          color: #fff;
+          letter-spacing: 3px;
+          font-family: "VT323";
+        }
+        .cbar {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: auto;
+          min-height: 54px;
+          background: var(--panel-dark);
+          border-top: 2px solid var(--coal);
+          transform: translateY(calc(100% - 28px));
+          transition: transform 0.25s steps(5);
+        }
+        .cbar.ls-open {
+          transform: translateY(0);
+        }
+        .cbar-toggle {
+          display: flex !important;
+        }
+        .app > *:not(.scene) {
+          flex-shrink: 0;
+        }
+        .mix-bar {
+          top: 52px;
+        }
+      }
+      .ls-hint {
+        display: none;
+      }
+      .cbar-toggle {
+        display: none;
+        position: absolute;
+        top: -26px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--panel-dark);
+        border: 2px solid var(--coal);
+        border-bottom: none;
+        color: #fff;
+        font-family: "VT323";
+        font-size: 16px;
+        padding: 2px 12px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div class="spacer"></div>
+
+      <!-- 标题栏 -->
+      <div class="tbar">
+        <div class="logo">PixelNoise</div>
+        <button class="pb sm" id="mixBtn" title="混音模式">MIX</button>
+        <button
+          class="pb"
+          style="width: 32px; height: 32px; font-size: 14px"
+          id="themeBtn"
+        >
+          🌙
+        </button>
+        <button
+          class="pb"
+          style="width: 32px; height: 32px; font-size: 16px"
+          id="menuBtn"
+        >
+          ≡
+        </button>
+      </div>
+
+      <!-- 场景 -->
+      <div class="scene" id="scene">
+        <canvas id="scene-canvas"></canvas>
+        <button class="pb acc play-fab" id="playFab">▶</button>
+        <div class="mix-bar" id="mixBar">🎛 混音模式：可多选叠加</div>
+      </div>
+
+      <!-- 声音条 / 横屏侧抽屉 -->
+      <div class="sstrip" id="sstrip"></div>
+      <div class="ls-hint" id="lsHint">声音</div>
+
+      <!-- 底部控制 -->
+      <div class="cbar" id="cbar">
+        <div class="cbar-toggle" id="cbarToggle">▲ 展开</div>
+        <button
+          class="pb acc"
+          style="width: 48px; height: 48px; font-size: 18px"
+          id="ctrlPlay"
+        >
+          ▶
+        </button>
+        <div class="sbox">
+          <span style="font-size: 15px">🔈</span>
+          <div class="strk" id="strk">
+            <div class="sfill" id="sfill"></div>
+            <div class="sthumb" id="sthumb"></div>
+          </div>
+          <span class="vlbl" id="vlbl">50</span>
+        </div>
+        <button class="pb sm" id="timerBtn">
+          <div class="timer-lbl">⏰<br />off</div>
+        </button>
+      </div>
+
+      <!-- 像素溶解 -->
+      <div class="dissolve" id="dis"><canvas id="dcanvas"></canvas></div>
+
+      <!-- 汉堡菜单 -->
+      <div class="mpanel" id="mpanel">
+        <button class="pb" id="mNight">🌙 切换夜间模式</button>
+        <button class="pb" id="mMix">🎛 混音模式 ON/OFF</button>
+        <button class="pb" id="mAbout">📖 PixelNoise v3</button>
+        <button class="pb acc" id="mClose">✕ 关闭</button>
+      </div>
+    </div>
+
+    <script>
+      // ===================== 声音数据 =====================
+      const SOUNDS = [
+        { id: "rain", name: "雨声", col: "#4A6A80" },
+        { id: "forest", name: "森林", col: "#4A6A4A" },
+        { id: "waves", name: "海浪", col: "#2A5A70" },
+        { id: "fire", name: "篝火", col: "#6A3A1A" },
+        { id: "snow", name: "雪花", col: "#7A8A9A" },
+        { id: "noise", name: "纯噪", col: "#555566" },
+      ];
+
+      const TIMERS = [0, 15, 30, 60];
+
+      // ===================== 像素 SVG 图标 =====================
+      const ICONS = {
+        rain: `<svg viewBox="0 0 16 16"><rect fill="#5B7FAA" x="3" y="1" width="10" height="6" rx="0"/>
+    <rect fill="#87AECE" x="1" y="3" width="14" height="2"/>
+    <rect fill="#5B7FAA" x="3" y="9" width="2" height="5"/>
+    <rect fill="#5B7FAA" x="7" y="11" width="2" height="4"/>
+    <rect fill="#5B7FAA" x="11" y="9" width="2" height="5"/></svg>`,
+        forest: `<svg viewBox="0 0 16 16"><rect fill="#2E7D32" x="5" y="1" width="6" height="2"/>
+    <rect fill="#388E3C" x="3" y="3" width="10" height="2"/>
+    <rect fill="#43A047" x="1" y="5" width="14" height="3"/>
+    <rect fill="#2E7D32" x="3" y="8" width="10" height="2"/>
+    <rect fill="#5D4037" x="6" y="10" width="4" height="5"/></svg>`,
+        waves: `<svg viewBox="0 0 16 16"><rect fill="#29B6F6" x="0" y="6" width="3" height="2"/>
+    <rect fill="#29B6F6" x="4" y="4" width="3" height="2"/>
+    <rect fill="#0288D1" x="8" y="6" width="3" height="2"/>
+    <rect fill="#0288D1" x="12" y="4" width="4" height="2"/>
+    <rect fill="#0288D1" x="0" y="10" width="4" height="2"/>
+    <rect fill="#29B6F6" x="5" y="8" width="3" height="2"/>
+    <rect fill="#0288D1" x="9" y="10" width="7" height="2"/>
+    <rect fill="#01579B" x="0" y="13" width="16" height="3"/></svg>`,
+        fire: `<svg viewBox="0 0 16 16"><rect fill="#FF8F00" x="4" y="8" width="8" height="5"/>
+    <rect fill="#FFB300" x="6" y="5" width="4" height="5"/>
+    <rect fill="#FFD54F" x="7" y="2" width="2" height="5"/>
+    <rect fill="#FF6F00" x="3" y="11" width="10" height="4"/>
+    <rect fill="#FF8F00" x="5" y="3" width="2" height="3"/>
+    <rect fill="#FF8F00" x="9" y="4" width="2" height="3"/></svg>`,
+        snow: `<svg viewBox="0 0 16 16"><rect fill="#B3E5FC" x="7" y="1" width="2" height="14"/>
+    <rect fill="#B3E5FC" x="1" y="7" width="14" height="2"/>
+    <rect fill="#B3E5FC" x="3" y="3" width="2" height="2"/>
+    <rect fill="#B3E5FC" x="11" y="3" width="2" height="2"/>
+    <rect fill="#B3E5FC" x="3" y="11" width="2" height="2"/>
+    <rect fill="#B3E5FC" x="11" y="11" width="2" height="2"/>
+    <rect fill="#E1F5FE" x="6" y="6" width="4" height="4"/></svg>`,
+        noise: `<svg viewBox="0 0 16 16"><rect fill="#888" x="0" y="0" width="4" height="4"/>
+    <rect fill="#444" x="4" y="0" width="4" height="4"/>
+    <rect fill="#AAA" x="8" y="0" width="4" height="4"/>
+    <rect fill="#666" x="12" y="0" width="4" height="4"/>
+    <rect fill="#AAA" x="0" y="4" width="4" height="4"/>
+    <rect fill="#888" x="4" y="4" width="4" height="4"/>
+    <rect fill="#444" x="8" y="4" width="4" height="4"/>
+    <rect fill="#AAA" x="12" y="4" width="4" height="4"/>
+    <rect fill="#666" x="0" y="8" width="4" height="4"/>
+    <rect fill="#AAA" x="4" y="8" width="4" height="4"/>
+    <rect fill="#888" x="8" y="8" width="4" height="4"/>
+    <rect fill="#444" x="12" y="8" width="4" height="4"/>
+    <rect fill="#888" x="0" y="12" width="4" height="4"/>
+    <rect fill="#666" x="4" y="12" width="4" height="4"/>
+    <rect fill="#AAA" x="8" y="12" width="4" height="4"/>
+    <rect fill="#888" x="12" y="12" width="4" height="4"/></svg>`,
+      };
+
+      // ===================== 状态 =====================
+      const DB = {
+        load() {
+          try {
+            return JSON.parse(localStorage.getItem("pxn3")) || {};
+          } catch (e) {
+            return {};
+          }
+        },
+        save(d) {
+          localStorage.setItem("pxn3", JSON.stringify(d));
+        },
+      };
+      const sv = DB.load();
+      const S = {
+        sound: sv.sound || "rain",
+        mixSounds: sv.mixSounds || [],
+        volume: sv.volume ?? 50,
+        theme: sv.theme || "day",
+        playing: false,
+        mixMode: false,
+        timerIdx: 0,
+        timerLeft: 0,
+        lsStripOpen: false,
+        lsBarOpen: false,
+      };
+
+      // ===================== DOM =====================
+      const $ = (id) => document.getElementById(id);
+      const el = {
+        app: $("app"),
+        canvas: $("scene-canvas"),
+        playFab: $("playFab"),
+        ctrlPlay: $("ctrlPlay"),
+        strip: $("sstrip"),
+        lsHint: $("lsHint"),
+        sfill: $("sfill"),
+        sthumb: $("sthumb"),
+        strk: $("strk"),
+        vlbl: $("vlbl"),
+        themeBtn: $("themeBtn"),
+        menuBtn: $("menuBtn"),
+        mixBtn: $("mixBtn"),
+        mpanel: $("mpanel"),
+        mNight: $("mNight"),
+        mMix: $("mMix"),
+        mClose: $("mClose"),
+        timerBtn: $("timerBtn"),
+        mixBar: $("mixBar"),
+        cbar: $("cbar"),
+        cbarToggle: $("cbarToggle"),
+        dis: $("dis"),
+        dcanvas: $("dcanvas"),
+      };
+      const sx = el.canvas.getContext("2d", { alpha: false });
+
+      // ===================== AUDIO ENGINE =====================
+      let ACtx,
+        mGain,
+        nodes = [];
+      function initAudio() {
+        if (ACtx) return;
+        ACtx = new (window.AudioContext || window.webkitAudioContext)();
+        mGain = ACtx.createGain();
+        mGain.connect(ACtx.destination);
+        applyVol();
+      }
+      function applyVol() {
+        if (mGain && ACtx)
+          mGain.gain.setValueAtTime(
+            Math.pow(S.volume / 100, 2),
+            ACtx.currentTime,
+          );
+      }
+      function stopAudio() {
+        nodes.forEach((n) => {
+          try {
+            n.stop?.();
+            n.disconnect?.();
+          } catch (e) {}
+        });
+        nodes = [];
+      }
+
+      function mkBuf(type) {
+        const len = ACtx.sampleRate * 2,
+          buf = ACtx.createBuffer(1, len, ACtx.sampleRate),
+          d = buf.getChannelData(0);
+        let p = 0;
+        for (let i = 0; i < len; i++) {
+          const w = Math.random() * 2 - 1;
+          if (type === "br") {
+            d[i] = (p + 0.02 * w) / 1.02;
+            p = d[i];
+            d[i] *= 3.5;
+          } else if (type === "pk") {
+            d[i] = w * 0.12;
+          } else {
+            d[i] = w * 0.45;
+          }
+        }
+        return buf;
+      }
+
+      const synth = {
+        rain() {
+          const s = _src("pk");
+          const f = _flt("lowpass", 1100);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+        },
+        forest() {
+          const s = _src("pk");
+          const f = _flt("lowpass", 600);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+          const o = ACtx.createOscillator(),
+            g = ACtx.createGain();
+          g.gain.value = 0;
+          o.connect(g);
+          g.connect(mGain);
+          o.start();
+          nodes.push(o, g);
+          const iv = setInterval(() => {
+            if (!S.playing) return;
+            if (Math.random() > 0.45 && ACtx.state === "running") {
+              o.frequency.setValueAtTime(
+                1800 + Math.random() * 2000,
+                ACtx.currentTime,
+              );
+              g.gain.setValueAtTime(0.08, ACtx.currentTime);
+              g.gain.exponentialRampToValueAtTime(
+                0.001,
+                ACtx.currentTime + 0.15,
+              );
+              g.gain.setValueAtTime(0, ACtx.currentTime + 0.16);
+            }
+          }, 900);
+          nodes.push({ stop: () => clearInterval(iv) });
+        },
+        waves() {
+          const s = _src("pk");
+          const f = _flt("lowpass", 800);
+          const lfo = ACtx.createOscillator();
+          lfo.frequency.value = 0.09;
+          const lg = ACtx.createGain();
+          lg.gain.value = 500;
+          lfo.connect(lg);
+          lg.connect(f.frequency);
+          const am = ACtx.createOscillator();
+          am.frequency.value = 0.09;
+          const ag = ACtx.createGain();
+          ag.gain.value = 0.25;
+          am.connect(ag);
+          s.connect(f);
+          f.connect(ag);
+          ag.connect(mGain);
+          s.start();
+          lfo.start();
+          am.start();
+          nodes.push(s, f, lfo, lg, am, ag);
+        },
+        fire() {
+          const s = _src("br");
+          const f = _flt("lowpass", 380);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+        },
+        snow() {
+          const s = _src("pk");
+          const f = _flt("lowpass", 480);
+          const g = ACtx.createGain();
+          g.gain.value = 0.55;
+          s.connect(f);
+          f.connect(g);
+          g.connect(mGain);
+          s.start();
+          nodes.push(s, f, g);
+        },
+        noise() {
+          const s = _src("wh");
+          s.connect(mGain);
+          s.start();
+          nodes.push(s);
+        },
+      };
+
+      function _src(type) {
+        const s = ACtx.createBufferSource();
+        s.buffer = mkBuf(type);
+        s.loop = true;
+        return s;
+      }
+      function _flt(type, freq) {
+        const f = ACtx.createBiquadFilter();
+        f.type = type;
+        f.frequency.value = freq;
+        return f;
+      }
+
+      function startAudio() {
+        initAudio();
+        if (ACtx.state === "suspended") ACtx.resume();
+        stopAudio();
+        const toPlay =
+          S.mixMode && S.mixSounds.length ? S.mixSounds : [S.sound];
+        toPlay.forEach((id) => {
+          if (synth[id]) synth[id]();
+        });
+      }
+
+      // ===================== PIXEL DISSOLVE =====================
+      function dissolve(cb, skipAnim) {
+        if (skipAnim) {
+          if (cb) cb();
+          return;
+        }
+        const tc = el.dcanvas,
+          tx = tc.getContext("2d");
+        const TW = 60,
+          TH = 90;
+        tc.width = TW;
+        tc.height = TH;
+        const cells = [];
+        for (let y = 0; y < TH; y++)
+          for (let x = 0; x < TW; x++) cells.push({ x, y, t: Math.random() });
+        cells.sort((a, b) => a.t - b.t);
+        el.dis.classList.add("on");
+        const col = S.theme === "night" ? "#3A6A38" : "#A0A0A0";
+        let i = 0;
+        const B = Math.ceil(cells.length / 14);
+        const step = () => {
+          tx.fillStyle = col;
+          for (let k = 0; k < B && i < cells.length; k++, i++)
+            tx.fillRect(cells[i].x, cells[i].y, 1, 1);
+          if (i < cells.length) {
+            requestAnimationFrame(step);
+          } else {
+            if (cb) cb();
+            setTimeout(() => {
+              let j = cells.length - 1;
+              const step2 = () => {
+                tx.clearRect(0, 0, TW, TH);
+                const left = cells.slice(0, j);
+                tx.fillStyle = col;
+                left.forEach((c) => tx.fillRect(c.x, c.y, 1, 1));
+                j -= B;
+                if (j > 0) requestAnimationFrame(step2);
+                else el.dis.classList.remove("on");
+              };
+              step2();
+            }, 60);
+          }
+        };
+        step();
+      }
+
+      // ===================== CANVAS 场景 =====================
+      const CW = 200,
+        CH = 300;
+      el.canvas.width = CW;
+      el.canvas.height = CH;
+      let parts = [],
+        ripples = [];
+      const SCENE = {
+        rain: {
+          sky1: "#4A6070",
+          sky2: "#3A5060",
+          gnd: "#3A5040",
+          pt: "#8AB4D0",
+        },
+        forest: {
+          sky1: "#4A6040",
+          sky2: "#5A7050",
+          gnd: "#2E4020",
+          pt: "#90C870",
+        },
+        waves: {
+          sky1: "#1A4060",
+          sky2: "#2A5070",
+          gnd: "#1A3A50",
+          pt: "#50B0D0",
+        },
+        fire: {
+          sky1: "#3A2010",
+          sky2: "#4A2A18",
+          gnd: "#2A1808",
+          pt: "#FFA030",
+        },
+        snow: {
+          sky1: "#6A7A8A",
+          sky2: "#7A8A9A",
+          gnd: "#8090A0",
+          pt: "#D8EEFF",
+        },
+        noise: {
+          sky1: "#444450",
+          sky2: "#505060",
+          gnd: "#383840",
+          pt: "#909090",
+        },
+      };
+
+      function spawnPart(id) {
+        const base = { type: id, life: 0, max: 50 + Math.random() * 70 };
+        switch (id) {
+          case "rain":
+            return {
+              ...base,
+              x: Math.random() * CW,
+              y: 0,
+              vx: 1.5,
+              vy: 7,
+              sz: 1,
+            };
+          case "forest":
+            return {
+              ...base,
+              x: Math.random() * CW,
+              y: CW * 0.68,
+              vx: (Math.random() - 0.5) * 0.3,
+              vy: -1.2 - Math.random() * 1.2,
+              sz: 2,
+            };
+          case "waves":
+            return {
+              ...base,
+              x: 0,
+              y: CW * 0.72 + Math.random() * 20,
+              vx: 2.5,
+              vy: 0,
+              sz: 2,
+              phase: Math.random() * Math.PI * 2,
+            };
+          case "fire":
+            return {
+              ...base,
+              x: CW / 2 + (Math.random() - 0.5) * 20,
+              y: CH * 0.78,
+              vx: (Math.random() - 0.5) * 0.4,
+              vy: -1.5 - Math.random() * 2,
+              sz: 3,
+            };
+          case "snow":
+            return {
+              ...base,
+              x: Math.random() * CW,
+              y: 0,
+              vx: (Math.random() - 0.5) * 0.6,
+              vy: 0.8 + Math.random() * 0.6,
+              sz: 3,
+            };
+          case "noise":
+            return {
+              ...base,
+              x: Math.random() * CW,
+              y: Math.random() * CH,
+              vx: 0,
+              vy: 0,
+              sz: 2,
+            };
+        }
+        return base;
+      }
+
+      function getSceneIds() {
+        return S.mixMode && S.mixSounds.length ? S.mixSounds : [S.sound];
+      }
+
+      function drawScene(t) {
+        const ids = getSceneIds();
+        const mainId = ids[0];
+        const sc = SCENE[mainId] || SCENE.noise;
+
+        // 分层背景：天空
+        sx.fillStyle = sc.sky1;
+        sx.fillRect(0, 0, CW, CH * 0.55);
+        sx.fillStyle = sc.sky2;
+        sx.fillRect(0, CH * 0.55, CW, CH * 0.25);
+        // 地面
+        sx.fillStyle = sc.gnd;
+        sx.fillRect(0, CH * 0.8, CW, CH * 0.2);
+
+        // 场景装饰物
+        if (mainId === "forest" || mainId === "noise" || mainId === "snow") {
+          // 像素树轮廓
+          sx.fillStyle = "#2A4020";
+          [
+            [10, CH * 0.78],
+            [40, CH * 0.72],
+            [CW - 30, CH * 0.75],
+            [CW - 10, CH * 0.8],
+          ].forEach(([x, y]) => {
+            sx.fillRect(x, y - 24, 12, 24);
+            sx.fillRect(x - 8, y - 36, 28, 16);
+            sx.fillRect(x - 4, y - 48, 20, 14);
+          });
+        }
+        if (mainId === "fire") {
+          // 石头圆环
+          sx.fillStyle = "#5A4030";
+          sx.fillRect(CW / 2 - 16, CH * 0.8, 32, 8);
+          sx.fillStyle = "#8B6A50";
+          sx.fillRect(CW / 2 - 12, CH * 0.76, 24, 6);
+        }
+        if (mainId === "waves") {
+          // 水面深色层
+          sx.fillStyle = "#1A3A55";
+          sx.fillRect(0, CH * 0.65, CW, CH * 0.35);
+          sx.fillStyle = "#14304A";
+          sx.fillRect(0, CH * 0.78, CW, CH * 0.22);
+        }
+
+        // 粒子
+        const allIds = ids;
+        while (parts.length < allIds.length * 55)
+          parts.push(
+            spawnPart(allIds[Math.floor(Math.random() * allIds.length)]),
+          );
+
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i];
+          p.life++;
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.type === "noise") {
+            p.x = Math.random() * CW;
+            p.y = Math.random() * CH;
+          }
+          if (p.type === "fire") {
+            p.x += Math.sin(p.life * 0.18) * 0.8;
+          }
+          if (p.type === "waves") {
+            p.y =
+              CH * 0.68 +
+              Math.sin(p.x * 0.04 + p.phase + t * 0.001) * 10 +
+              Math.random() * 0.5;
+          }
+          if (
+            p.life > p.max ||
+            p.y > CH + 4 ||
+            p.y < -4 ||
+            p.x > CW + 4 ||
+            p.x < -4
+          ) {
+            parts.splice(i, 1);
+            continue;
+          }
+          sx.fillStyle = (SCENE[p.type] || SCENE.noise).pt;
+          sx.fillRect(
+            Math.floor(p.x / 2) * 2,
+            Math.floor(p.y / 2) * 2,
+            p.sz,
+            p.type === "rain" ? p.sz * 3 : p.sz,
+          );
+        }
+
+        // 涟漪
+        sx.strokeStyle =
+          S.theme === "night" ? "rgba(255,255,255,.6)" : "rgba(0,0,0,.4)";
+        sx.lineWidth = 2;
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const r = ripples[i];
+          r.r += 2.5;
+          if (r.r > r.max) {
+            ripples.splice(i, 1);
+            continue;
+          }
+          sx.strokeRect(r.x - r.r, r.y - r.r, r.r * 2, r.r * 2);
+        }
+      }
+
+      el.canvas.addEventListener("click", (e) => {
+        const rc = el.canvas.getBoundingClientRect();
+        ripples.push({
+          x: ((e.clientX - rc.left) * CW) / rc.width,
+          y: ((e.clientY - rc.top) * CH) / rc.height,
+          r: 2,
+          max: 35 + Math.random() * 25,
+        });
+        if (ACtx && ACtx.state === "suspended" && S.playing) ACtx.resume();
+      });
+
+      let lastT = 0;
+      function loop(t) {
+        requestAnimationFrame(loop);
+        if (t - lastT < 33) return;
+        lastT = t;
+        drawScene(t);
+      }
+      requestAnimationFrame(loop);
+
+      // ===================== SLIDER =====================
+      function posSlider() {
+        const p = S.volume / 100;
+        el.sfill.style.width = p * 100 + "%";
+        el.sthumb.style.left = p * 100 + "%";
+        el.vlbl.textContent = S.volume;
+      }
+      let drag = false;
+      function mvSlider(cx) {
+        const rc = el.strk.getBoundingClientRect();
+        let p = Math.max(0, Math.min(1, (cx - rc.left) / rc.width));
+        S.volume = Math.round(p * 20) * 5;
+        applyVol();
+        posSlider();
+        saveState();
+      }
+      el.strk.addEventListener("pointerdown", (e) => {
+        drag = true;
+        el.sthumb.classList.add("drag");
+        mvSlider(e.clientX);
+        e.preventDefault();
+      });
+      el.sthumb.addEventListener("pointerdown", (e) => {
+        drag = true;
+        el.sthumb.classList.add("drag");
+        e.preventDefault();
+      });
+      document.addEventListener("pointermove", (e) => {
+        if (drag) mvSlider(e.clientX);
+      });
+      document.addEventListener("pointerup", () => {
+        drag = false;
+        el.sthumb.classList.remove("drag");
+      });
+
+      // ===================== TIMER =====================
+      let timerIv = null;
+      function cycleTimer() {
+        S.timerIdx = (S.timerIdx + 1) % TIMERS.length;
+        if (timerIv) {
+          clearInterval(timerIv);
+          timerIv = null;
+        }
+        const m = TIMERS[S.timerIdx];
+        if (m > 0) {
+          S.timerLeft = m * 60;
+          timerIv = setInterval(() => {
+            S.timerLeft--;
+            renderTimerBtn();
+            if (S.timerLeft <= 0) {
+              clearInterval(timerIv);
+              timerIv = null;
+              togglePlay(false);
+            }
+          }, 1000);
+        }
+        renderTimerBtn();
+      }
+      function renderTimerBtn() {
+        const m = TIMERS[S.timerIdx];
+        el.timerBtn.innerHTML = `<div class="timer-lbl">⏰<br>${m > 0 ? m + "m" : "off"}</div>`;
+      }
+
+      // ===================== PLAY =====================
+      function togglePlay(force) {
+        S.playing = typeof force === "boolean" ? force : !S.playing;
+        if (S.playing) startAudio();
+        else stopAudio();
+        refreshUI();
+        saveState();
+      }
+      el.playFab.addEventListener("click", () => togglePlay());
+      el.ctrlPlay.addEventListener("click", () => togglePlay());
+      el.timerBtn.addEventListener("click", () => cycleTimer());
+
+      // ===================== SOUND CELLS =====================
+      function buildCells() {
+        el.strip.innerHTML = "";
+        SOUNDS.forEach((s) => {
+          const b = document.createElement("button");
+          b.className =
+            "pb scell" +
+            (S.sound === s.id && !S.mixMode ? " sel" : "") +
+            (S.mixSounds.includes(s.id) ? " mix-on" : "");
+          b.dataset.id = s.id;
+          b.innerHTML = `<div class="ico">${ICONS[s.id] || ""}</div><div class="lbl">${s.name}</div><div class="badge">✓</div>`;
+          b.addEventListener("click", () => selectSound(s.id));
+          el.strip.appendChild(b);
+        });
+      }
+
+      function selectSound(id) {
+        if (S.mixMode) {
+          // 混音模式：多选切换
+          const idx = S.mixSounds.indexOf(id);
+          if (idx >= 0) S.mixSounds.splice(idx, 1);
+          else if (S.mixSounds.length < 4) S.mixSounds.push(id);
+          if (S.playing) startAudio();
+          buildCells();
+          saveState();
+        } else {
+          dissolve(() => {
+            S.sound = id;
+            buildCells();
+            refreshUI();
+            if (S.playing) startAudio();
+            saveState();
+          });
+        }
+      }
+
+      // ===================== MIX MODE =====================
+      el.mixBtn.addEventListener("click", () => toggleMixMode());
+      el.mMix.addEventListener("click", () => {
+        toggleMixMode();
+        el.mpanel.classList.remove("on");
+      });
+      function toggleMixMode() {
+        S.mixMode = !S.mixMode;
+        if (!S.mixMode) S.mixSounds = [];
+        el.mixBar.classList.toggle("on", S.mixMode);
+        el.mixBtn.classList.toggle("sel", S.mixMode);
+        buildCells();
+        refreshUI();
+        if (S.playing) startAudio();
+        saveState();
+      }
+
+      // ===================== THEME =====================
+      el.themeBtn.addEventListener("click", () =>
+        setTheme(S.theme === "day" ? "night" : "day"),
+      );
+      el.mNight.addEventListener("click", () => {
+        setTheme(S.theme === "day" ? "night" : "day");
+        el.mpanel.classList.remove("on");
+      });
+      function setTheme(t) {
+        S.theme = t;
+        document.body.setAttribute("data-theme", t);
+        el.themeBtn.textContent = t === "day" ? "🌙" : "☀";
+        el.mNight.textContent =
+          t === "day" ? "🌙 切换夜间模式" : "☀ 切换日间模式";
+        saveState();
+      }
+
+      // ===================== MENU =====================
+      el.menuBtn.addEventListener("click", () => el.mpanel.classList.add("on"));
+      el.mClose.addEventListener("click", () =>
+        el.mpanel.classList.remove("on"),
+      );
+      el.mAbout.addEventListener("click", () => {
+        alert(
+          "PixelNoise v3\n融合版 - 像素风白噪音\n🎮 Minecraft 美学 × Web Audio",
+        );
+        el.mpanel.classList.remove("on");
+      });
+
+      // ===================== LANDSCAPE DRAWER =====================
+      el.lsHint.addEventListener("click", () => {
+        S.lsStripOpen = !S.lsStripOpen;
+        el.strip.classList.toggle("ls-open", S.lsStripOpen);
+      });
+      el.cbarToggle.addEventListener("click", () => {
+        S.lsBarOpen = !S.lsBarOpen;
+        el.cbar.classList.toggle("ls-open", S.lsBarOpen);
+        el.cbarToggle.textContent = S.lsBarOpen ? "▼ 收起" : "▲ 展开";
+      });
+
+      // ===================== REFRESH UI =====================
+      function refreshUI() {
+        const pi = S.playing ? "⏸" : "▶";
+        el.playFab.textContent = pi;
+        el.ctrlPlay.textContent = pi;
+        el.playFab.classList.toggle("dn", S.playing);
+        posSlider();
+        renderTimerBtn();
+      }
+
+      // ===================== PERSIST =====================
+      function saveState() {
+        DB.save({
+          sound: S.sound,
+          mixSounds: S.mixSounds,
+          volume: S.volume,
+          theme: S.theme,
+          mixMode: S.mixMode,
+        });
+      }
+
+      // ===================== INIT =====================
+      (function init() {
+        document.body.setAttribute("data-theme", S.theme);
+        el.themeBtn.textContent = S.theme === "day" ? "🌙" : "☀";
+        el.mNight.textContent =
+          S.theme === "day" ? "🌙 切换夜间模式" : "☀ 切换日间模式";
+        if (S.mixMode) {
+          el.mixBar.classList.add("on");
+          el.mixBtn.classList.add("sel");
+        }
+        buildCells();
+        refreshUI();
+        // 横屏初始收起
+        const mql = window.matchMedia(
+          "(orientation:landscape)and(max-height:520px)",
+        );
+        if (mql.matches) el.cbar.classList.remove("ls-open");
+        mql.addEventListener("change", (e) => {
+          if (!e.matches) {
+            el.strip.classList.remove("ls-open");
+            el.cbar.classList.remove("ls-open");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

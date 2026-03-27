@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>PixelAmbient - 像素白噪音</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=VT323&family=Zpix&display=swap");
+    
+    :root {
+      --px-bg: #1a1a2e;
+      --px-bg-night: #0f0f1e;
+      --px-panel: #2d2d44;
+      --px-border-light: #5a5a7a;
+      --px-border-dark: #1a1a2a;
+      --px-accent: #44ebf2;
+      --px-gold: #ffd700;
+      --px-danger: #ff6b6b;
+      --px-success: #51cf66;
+      
+      --slot-size: clamp(56px, 18vw, 72px);
+      --pixel: 4px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+      image-rendering: pixelated;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--px-bg);
+      font-family: "VT323", monospace;
+      color: #fff;
+    }
+
+    body[data-theme="night"] { background: var(--px-bg-night); }
+
+    /* ===== CORE LAYOUT ===== */
+    .app {
+      width: 100%;
+      height: 100dvh;
+      display: grid;
+      grid-template-areas:
+        "header"
+        "scene"
+        "controls";
+      grid-template-rows: auto 1fr auto;
+      position: relative;
+    }
+
+    /* ===== SCENE LAYER ===== */
+    #scene {
+      grid-area: scene;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      z-index: 1;
+    }
+
+    #dissolve-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    /* ===== HEADER HUD ===== */
+    .hud-header {
+      grid-area: header;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      z-index: 20;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .brand h1 {
+      font-size: 24px;
+      text-shadow: 2px 2px 0 #000;
+      letter-spacing: 2px;
+      color: var(--px-accent);
+    }
+    .brand .time {
+      font-size: 18px;
+      color: var(--px-gold);
+      text-shadow: 1px 1px 0 #000;
+      opacity: 0.8;
+    }
+
+    .scene-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .tab-btn {
+      width: 40px;
+      height: 40px;
+      background: var(--px-panel);
+      border: 2px solid var(--px-border-dark);
+      border-top-color: var(--px-border-light);
+      border-left-color: var(--px-border-light);
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .tab-btn:active {
+      transform: translate(2px, 2px);
+      border-color: var(--px-border-dark);
+    }
+    .tab-btn.active {
+      background: var(--px-accent);
+      color: #000;
+      box-shadow: 0 0 10px var(--px-accent);
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--px-accent);
+    }
+
+    /* ===== MAIN PLAY FAB ===== */
+    .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 15;
+      pointer-events: none;
+    }
+    .play-fab {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--px-danger);
+      border: 4px solid #fff;
+      border-right-color: #8b0000;
+      border-bottom-color: #8b0000;
+      color: #fff;
+      font-size: 32px;
+      cursor: pointer;
+      pointer-events: auto;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.3), 0 0 20px rgba(255,107,107,0.4);
+      transition: all 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .play-fab:active {
+      transform: translate(2px, 2px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.3);
+    }
+    .play-fab.playing {
+      background: var(--px-success);
+      border-right-color: #2b8a3e;
+      border-bottom-color: #2b8a3e;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.3), 0 0 30px rgba(81,207,102,0.5);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.05); }
+    }
+
+    /* ===== CONTROLS AREA ===== */
+    .hud-controls {
+      grid-area: controls;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 20;
+      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    }
+
+    /* Master Volume - MC XP Bar Style */
+    .master-vol {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .vol-icon { font-size: 24px; filter: drop-shadow(2px 2px 0 #000); }
+    .xp-track {
+      flex: 1;
+      height: 20px;
+      background: #000;
+      border: 2px solid var(--px-border-light);
+      border-right-color: var(--px-border-dark);
+      border-bottom-color: var(--px-border-dark);
+      position: relative;
+      cursor: ew-resize;
+    }
+    .xp-fill {
+      height: 100%;
+      background: linear-gradient(to bottom, #7efc20 0%, #5cb816 50%, #3d7a0f 100%);
+      width: 50%;
+      transition: width 0.1s;
+      box-shadow: inset 0 2px rgba(255,255,255,0.3);
+    }
+    .xp-thumb {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 28px;
+      background: var(--px-accent);
+      border: 2px solid #fff;
+      border-right-color: #666;
+      border-bottom-color: #666;
+      pointer-events: none;
+      transition: left 0.1s;
+      box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    .xp-text {
+      min-width: 36px;
+      text-align: center;
+      font-size: 20px;
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    /* Sound Grid - Portrait Mode */
+    .hotbar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .slot {
+      aspect-ratio: 1;
+      min-width: var(--slot-size);
+      max-width: var(--slot-size);
+      background: var(--px-panel);
+      border: 3px solid var(--px-border-dark);
+      border-top-color: var(--px-border-light);
+      border-left-color: var(--px-border-light);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.1s;
+    }
+    .slot:active {
+      transform: scale(0.95);
+      border-color: var(--px-border-dark);
+    }
+    .slot.selected {
+      background: rgba(68,235,242,0.2);
+      border-color: var(--px-accent);
+      box-shadow: 0 0 15px rgba(68,235,242,0.3);
+    }
+    .slot.selected::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border: 2px solid var(--px-accent);
+      pointer-events: none;
+    }
+    .slot.playing::after {
+      content: '▶';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      font-size: 10px;
+      color: var(--px-success);
+      text-shadow: 1px 1px 0 #000;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+    .slot-icon {
+      width: 60%;
+      height: 60%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.5));
+    }
+    .slot-label {
+      font-size: 14px;
+      text-shadow: 1px 1px 0 #000;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 90%;
+    }
+
+    /* Secondary Controls */
+    .ctrl-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      height: 44px;
+      padding: 0 20px;
+      background: var(--px-panel);
+      border: 2px solid var(--px-border-dark);
+      border-top-color: var(--px-border-light);
+      border-left-color: var(--px-border-light);
+      color: #fff;
+      font-family: inherit;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-shadow: 1px 1px 0 #000;
+      transition: all 0.1s;
+    }
+    .ctrl-btn:active {
+      transform: translate(2px, 2px);
+      border-color: var(--px-border-dark);
+    }
+    .ctrl-btn.active {
+      background: var(--px-gold);
+      color: #000;
+      text-shadow: none;
+    }
+
+    /* ===== LANDSCAPE MODE ===== */
+    @media (orientation: landscape) {
+      .app {
+        grid-template-areas:
+          "header header"
+          "sidebar scene"
+          "sidebar controls";
+        grid-template-columns: 200px 1fr;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .hud-header {
+        grid-column: 1 / -1;
+      }
+
+      .hud-controls {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+      }
+
+      .hotbar {
+        grid-area: sidebar;
+        display: flex;
+        flex-direction: column;
+        grid-template-columns: 1fr;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: 100%;
+        padding: 8px;
+        background: rgba(0,0,0,0.5);
+      }
+
+      .slot {
+        width: 100%;
+        max-width: none;
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 8px;
+        gap: 12px;
+      }
+      .slot-icon { width: 32px; height: 32px; font-size: 24px; }
+      .slot-label { font-size: 16px; }
+
+      .master-vol { max-width: 300px; margin: 0; }
+      
+      /* Hide play overlay in landscape, show in sidebar */
+      .play-overlay { display: none; }
+      
+      .landscape-play {
+        display: flex !important;
+      }
+    }
+
+    @media (orientation: portrait) {
+      .landscape-play { display: none !important; }
+    }
+
+    /* ===== MIXER MODE OVERLAY ===== */
+    .mixer-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      padding: 20px;
+      padding-top: max(20px, env(safe-area-inset-top));
+    }
+    .mixer-overlay.active { display: flex; }
+    
+    .mixer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .mixer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .mix-channel {
+      background: var(--px-panel);
+      border: 2px solid var(--px-border-dark);
+      border-top-color: var(--px-border-light);
+      border-left-color: var(--px-border-light);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mix-channel input[type="range"] {
+      width: 100%;
+      accent-color: var(--px-accent);
+    }
+
+    /* ===== UTILITIES ===== */
+    .hidden { display: none !important; }
+    
+    /* Loading Screen */
+    .loader {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      font-size: 20px;
+      color: var(--px-accent);
+    }
+    .pixel-progress {
+      width: 200px;
+      height: 20px;
+      border: 2px solid #fff;
+      position: relative;
+    }
+    .pixel-bar {
+      height: 100%;
+      background: var(--px-accent);
+      width: 0%;
+      transition: width 0.3s;
+      box-shadow: 0 0 10px var(--px-accent);
+    }
+  </style>
+</head>
+<body data-theme="day">
+  <!-- Loading Screen -->
+  <div class="loader" id="loader">
+    <div>正在生成像素世界...</div>
+    <div class="pixel-progress">
+      <div class="pixel-bar" id="loadBar"></div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <canvas id="scene"></canvas>
+    <canvas id="dissolve-layer"></canvas>
+
+    <!-- Header -->
+    <header class="hud-header">
+      <div class="brand">
+        <h1>PixelAmbient</h1>
+        <span class="time" id="clock">12:00</span>
+      </div>
+      <div class="scene-tabs">
+        <button class="tab-btn active" data-cat="all" title="全部">🌐</button>
+        <button class="tab-btn" data-cat="nature" title="自然">🌲</button>
+        <button class="tab-btn" data-cat="urban" title="城市">🏙️</button>
+        <button class="tab-btn" data-cat="noise" title="噪声">🎛️</button>
+      </div>
+    </header>
+
+    <!-- Central Play (Portrait only) -->
+    <div class="play-overlay">
+      <button class="play-fab" id="playFab">▶</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="hud-controls">
+      <!-- Master Volume -->
+      <div class="master-vol" id="volContainer">
+        <span class="vol-icon">🔊</span>
+        <div class="xp-track" id="xpTrack">
+          <div class="xp-fill" id="xpFill"></div>
+          <div class="xp-thumb" id="xpThumb"></div>
+        </div>
+        <span class="xp-text" id="xpText">50</span>
+      </div>
+
+      <!-- Sound Grid -->
+      <div class="hotbar" id="hotbar"></div>
+
+      <!-- Secondary Controls -->
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="mixBtn">🎛️ 混音台</button>
+        <button class="ctrl-btn landscape-play" id="landscapePlay">▶ 播放</button>
+        <button class="ctrl-btn" id="timerBtn">⏱️ 定时</button>
+        <button class="ctrl-btn" id="themeBtn">🌙 夜间</button>
+        <button class="ctrl-btn" id="randBtn">🎲 随机</button>
+      </div>
+    </div>
+
+    <!-- Mixer Overlay -->
+    <div class="mixer-overlay" id="mixer">
+      <div class="mixer-header">
+        <h2>混音台 (最多5个)</h2>
+        <button class="ctrl-btn" id="closeMixer">✕ 关闭</button>
+      </div>
+      <div class="mixer-grid" id="mixerGrid"></div>
+    </div>
+  </div>
+
+  <script>
+    // ===================== DATA =====================
+    const SOUNDS = [
+      { id: "white", name: "平衡噪声", cat: "noise", icon: "⚪" },
+      { id: "brown", name: "暗噪声", cat: "noise", icon: "🟤" },
+      { id: "blue", name: "亮噪声", cat: "noise", icon: "🔵" },
+      { id: "ocean", name: "海洋", cat: "nature", icon: "🌊" },
+      { id: "rain", name: "雨声", cat: "nature", icon: "🌧️" },
+      { id: "stream", name: "溪流", cat: "nature", icon: "💧" },
+      { id: "fire", name: "火苗", cat: "nature", icon: "🔥" },
+      { id: "night", name: "星空夜", cat: "nature", icon: "🌙" },
+      { id: "quiet", name: "静夜", cat: "nature", icon: "🌌" },
+      { id: "roof_rain", name: "屋顶雨", cat: "nature", icon: "🏠" },
+      { id: "plane", name: "飞机", cat: "urban", icon: "✈️" },
+      { id: "train", name: "火车", cat: "urban", icon: "🚂" },
+      { id: "bus", name: "公交", cat: "urban", icon: "🚌" },
+      { id: "boat", name: "轮船", cat: "urban", icon: "🚢" },
+      { id: "steam", name: "蒸汽", cat: "urban", icon: "💨" },
+    ];
+
+    const TIMERS = [0, 15, 30, 60, 120];
+
+    // ===================== STATE =====================
+    const state = {
+      current: 'rain',
+      mix: [],
+      playing: false,
+      volume: 50,
+      theme: 'day',
+      timer: 0,
+      category: 'all',
+      mixMode: false
+    };
+
+    // ===================== AUDIO ENGINE =====================
+    const Audio = {
+      ctx: null,
+      master: null,
+      sources: {},
+      
+      init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.connect(this.ctx.destination);
+        this.setVolume(state.volume);
+      },
+
+      setVolume(v) {
+        if (!this.master) return;
+        this.master.gain.setValueAtTime(Math.pow(v/100, 2), this.ctx.currentTime);
+      },
+
+      stopAll() {
+        Object.values(this.sources).forEach(node => {
+          try { node.stop?.(); node.disconnect?.(); } catch(e){}
+        });
+        this.sources = {};
+      },
+
+      generate(type) {
+        if (!this.ctx) return;
+        const t = this.ctx;
+        
+        // Helper functions
+        const noise = (algo) => {
+          const l = t.sampleRate * 2;
+          const b = t.createBuffer(1, l, t.sampleRate);
+          const d = b.getChannelData(0);
+          let p = 0;
+          for(let i=0; i<l; i++) {
+            const w = Math.random() * 2 - 1;
+            if(algo === 'brown') { p = (p + 0.02*w)/1.02; d[i] = p*3.5; }
+            else if(algo === 'pink') { d[i] = w*0.15; }
+            else if(algo === 'blue') { d[i] = (w-p)*0.5; p=w; }
+            else d[i] = w*0.5;
+          }
+          const s = t.createBufferSource();
+          s.buffer = b; s.loop = true; return s;
+        };
+
+        const filter = (t, f, q=1) => {
+          const flt = this.ctx.createBiquadFilter();
+          flt.type = t; flt.frequency.value = f; flt.Q.value = q;
+          return flt;
+        };
+
+        const gain = (v=1) => {
+          const g = this.ctx.createGain();
+          g.gain.value = v; return g;
+        };
+
+        const osc = (t, f) => {
+          const o = this.ctx.createOscillator();
+          o.type = t; o.frequency.value = f; return o;
+        };
+
+        // Generators
+        const gens = {
+          white: () => {
+            const s=noise('white'), f=filter('lowpass',3000), g=gain();
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          brown: () => {
+            const s=noise('brown'), f=filter('lowpass',400), g=gain();
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          blue: () => {
+            const s=noise('blue'), f=filter('highpass',800), g=gain();
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          ocean: () => {
+            const s=noise('pink'), f=filter('lowpass',500), g=gain();
+            const l=osc('sine',0.1); l.connect(g.gain); g.gain.value=0;
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); l.start(); return [s,l];
+          },
+          rain: () => {
+            const s=noise('pink'), f=filter('lowpass',1000), g=gain(0.8);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          stream: () => {
+            const s=noise('pink'), f=filter('bandpass',2000,0.5), g=gain(0.6);
+            const l=osc('sine',3); l.connect(g.gain);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); l.start(); return [s,l];
+          },
+          fire: () => {
+            const s=noise('brown'), f=filter('lowpass',400), g=gain();
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          night: () => {
+            const s=noise('brown'), f=filter('lowpass',200), g=gain(0.3);
+            s.connect(f); f.connect(g); g.connect(this.master); s.start();
+            // Crickets
+            const o=osc('sine',3500), cg=gain(0);
+            o.connect(cg); cg.connect(this.master); o.start();
+            const iv=setInterval(()=>{
+              if(!state.playing) return;
+              cg.gain.setValueAtTime(0.05, this.ctx.currentTime);
+              cg.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime+0.08);
+            }, 600);
+            return [s,o,{stop:()=>clearInterval(iv)}];
+          },
+          quiet: () => {
+            const s=noise('brown'), f=filter('lowpass',150), g=gain(0.15);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          roof_rain: () => {
+            const s=noise('pink'), f=filter('highpass',800), g=gain(0.6);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); return s;
+          },
+          plane: () => {
+            const s=noise('white'), f=filter('bandpass',800,2), g=gain();
+            const l=osc('sine',0.05), lg=gain(400);
+            l.connect(lg); lg.connect(f.frequency);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); l.start(); return [s,l];
+          },
+          steam: () => {
+            const s=noise('white'), f=filter('bandpass',1500), g=gain();
+            const l=osc('sine',0.3); l.connect(g.gain);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); l.start(); return [s,l];
+          },
+          boat: () => {
+            const s=noise('pink'), f=filter('lowpass',600), g=gain(0.4);
+            const l=osc('sine',0.2); l.connect(g.gain);
+            s.connect(f); f.connect(g); g.connect(this.master);
+            s.start(); l.start(); return [s,l];
+          },
+          bus: () => {
+            const o=osc('sawtooth',60), f=filter('lowpass',200), g=gain(0.3);
+            o.connect(f); f.connect(g); g.connect(this.master); o.start();
+            const s=noise('brown'), sf=filter('lowpass',100), sg=gain(0.2);
+            s.connect(sf); sf.connect(sg); sg.connect(this.master); s.start();
+            return [o,s];
+          },
+          train: () => {
+            const o=osc('square',400), g=gain(), l=osc('square',3);
+            l.connect(g.gain); g.gain.value=0;
+            o.connect(g); g.connect(this.master); o.start(); l.start();
+            const s=noise('pink'), f=filter('lowpass',300);
+            s.connect(f); f.connect(this.master); s.start();
+            return [o,s,l];
+          }
+        };
+
+        return gens[type]?.() || null;
+      },
+
+      play(id) {
+        this.stopAll();
+        if (Array.isArray(id)) {
+          id.forEach((x,i) => {
+            const nodes = this.generate(x);
+            if(nodes) this.sources[x] = nodes;
+          });
+        } else {
+          const nodes = this.generate(id);
+          if(nodes) this.sources[id] = nodes;
+        }
+      }
+    };
+
+    // ===================== CANVAS VISUALS =====================
+    const Visuals = {
+      cvs: document.getElementById('scene'),
+      ctx: null,
+      particles: [],
+      stars: [],
+      width: 0,
+      height: 0,
+      scale: 4,
+
+      init() {
+        this.ctx = this.cvs.getContext('2d', { alpha: false });
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.loop();
+      },
+
+      resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        this.width = Math.ceil(w / this.scale);
+        this.height = Math.ceil(h / this.scale);
+        this.cvs.width = this.width;
+        this.cvs.height = this.height;
+      },
+
+      drawBg() {
+        const ctx = this.ctx;
+        const s = state.current;
+        const isNight = state.theme === 'night';
+        
+        // Sky gradient based on sound
+        let sky = '#1a1a2e';
+        if(s==='fire') sky='#3a2014';
+        else if(s==='rain'||s==='roof_rain') sky='#5b829e';
+        else if(s==='ocean') sky='#24618a';
+        else if(s==='night'||s==='quiet') sky='#0b111a';
+        else if(isNight) sky='#0f0f1e';
+        else if(s==='white') sky='#d0d0d5';
+        
+        if(isNight && s!=='night' && s!=='quiet') {
+          // Darken colors
+          const c = parseInt(sky.slice(1), 16);
+          const r = Math.floor(((c>>16)&255)*0.4);
+          const g = Math.floor(((c>>8)&255)*0.4);
+          const b = Math.floor((c&255)*0.4);
+          sky = `rgb(${r},${g},${b})`;
+        }
+
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, this.width, this.height);
+      },
+
+      drawParticles() {
+        const ctx = this.ctx;
+        const w = this.width;
+        const h = this.height;
+        const ids = state.mixMode ? state.mix : [state.current];
+
+        // Stars for night/quiet
+        if(ids.includes('night') || ids.includes('quiet')) {
+          if(this.stars.length < 30) {
+            this.stars.push({x:Math.random()*w, y:Math.random()*h*0.6, p:Math.random()*100});
+          }
+          ctx.fillStyle = '#f1c40f';
+          this.stars.forEach(s => {
+            if(Math.sin(Date.now()*0.001+s.p)>0) ctx.fillRect(s.x, s.y, 1, 1);
+          });
+        }
+
+        // Rain
+        if(ids.includes('rain')) {
+          if(Math.random()>0.3) this.particles.push({t:'rain', x:Math.random()*w, y:-2, v:4});
+        }
+        if(ids.includes('roof_rain')) {
+          if(Math.random()>0.6) this.particles.push({t:'rain', x:Math.random()*w, y:-2, v:3, c:'#7f8c8d'});
+        }
+
+        // Fire
+        if(ids.includes('fire')) {
+          if(Math.random()>0.2) this.particles.push({t:'fire', x:w*0.3+Math.random()*w*0.4, y:h*0.9, l:30+Math.random()*50});
+        }
+
+        // Steam
+        if(ids.includes('steam')) {
+          if(Math.random()>0.8) this.particles.push({t:'steam', x:w*0.4+Math.random()*w*0.2, y:h, v:0.5});
+        }
+
+        // Render particles
+        for(let i=this.particles.length-1; i>=0; i--) {
+          const p = this.particles[i];
+          if(p.t==='rain') {
+            p.y += p.v; p.x += p.v*0.1;
+            ctx.fillStyle = p.c || '#a3d5f2';
+            ctx.fillRect(p.x, p.y, 1, 3);
+            if(p.y > h*0.8) this.particles.splice(i,1);
+          }
+          else if(p.t==='fire') {
+            p.y -= 0.5; p.x += Math.sin(p.y*0.1)*0.5; p.l--;
+            ctx.fillStyle = p.l>30?'#ffdb4d':p.l>15?'#f9630c':'#d64000';
+            ctx.fillRect(p.x, p.y, 2, 2);
+            if(p.l<=0) this.particles.splice(i,1);
+          }
+          else if(p.t==='steam') {
+            p.y -= p.v; p.x += Math.sin(p.y*0.05)*0.3;
+            ctx.fillStyle = 'rgba(189,195,199,0.6)';
+            ctx.fillRect(p.x, p.y, 2, 2);
+            if(p.y < h*0.5) this.particles.splice(i,1);
+          }
+        }
+      },
+
+      loop() {
+        this.drawBg();
+        this.drawParticles();
+        requestAnimationFrame(() => this.loop());
+      }
+    };
+
+    // ===================== UI CONTROLLER =====================
+    const UI = {
+      init() {
+        this.renderSlots();
+        this.setupEvents();
+        this.setupGestures();
+        this.startClock();
+        this.load();
+      },
+
+      renderSlots() {
+        const container = document.getElementById('hotbar');
+        container.innerHTML = '';
+        
+        const sounds = state.category === 'all' ? SOUNDS : SOUNDS.filter(s => s.cat === state.category);
+        
+        sounds.forEach(s => {
+          const slot = document.createElement('div');
+          const isActive = state.mixMode ? state.mix.includes(s.id) : state.current === s.id;
+          const isPlaying = state.playing && isActive;
+          
+          slot.className = `slot ${isActive?'selected':''} ${isPlaying?'playing':''}`;
+          slot.innerHTML = `
+            <div class="slot-icon">${s.icon}</div>
+            <div class="slot-label">${s.name}</div>
+          `;
+          slot.onclick = () => this.selectSound(s.id);
+          slot.dataset.id = s.id;
+          container.appendChild(slot);
+        });
+      },
+
+      selectSound(id) {
+        Audio.init();
+        if(Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        
+        if(state.mixMode) {
+          const idx = state.mix.indexOf(id);
+          if(idx > -1) state.mix.splice(idx, 1);
+          else if(state.mix.length < 5) state.mix.push(id);
+          if(state.mix.length === 0) state.mix.push(id);
+        } else {
+          if(state.current === id) return;
+          state.current = id;
+        }
+        
+        this.updatePlayState();
+        this.renderSlots();
+        if(state.playing) Audio.play(state.mixMode ? state.mix : state.current);
+      },
+
+      updatePlayState() {
+        const btn = document.getElementById('playFab');
+        const lbtn = document.getElementById('landscapePlay');
+        const isPlaying = state.playing;
+        
+        btn.textContent = isPlaying ? '⏸' : '▶';
+        btn.classList.toggle('playing', isPlaying);
+        if(lbtn) lbtn.textContent = isPlaying ? '⏸ 暂停' : '▶ 播放';
+        
+        // Update slot indicators
+        document.querySelectorAll('.slot').forEach(slot => {
+          const id = slot.dataset.id;
+          const active = state.mixMode ? state.mix.includes(id) : state.current === id;
+          const playing = state.playing && active;
+          slot.classList.toggle('selected', active);
+          slot.classList.toggle('playing', playing);
+        });
+      },
+
+      setupEvents() {
+        // Play buttons
+        document.getElementById('playFab').onclick = () => this.togglePlay();
+        const lplay = document.getElementById('landscapePlay');
+        if(lplay) lplay.onclick = () => this.togglePlay();
+
+        // Category tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.onclick = () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.category = btn.dataset.cat;
+            this.renderSlots();
+          };
+        });
+
+        // Theme toggle
+        document.getElementById('themeBtn').onclick = () => {
+          state.theme = state.theme === 'day' ? 'night' : 'day';
+          document.body.dataset.theme = state.theme;
+          document.getElementById('themeBtn').textContent = state.theme === 'day' ? '🌙 夜间' : '☀️ 日间';
+        };
+
+        // Timer
+        document.getElementById('timerBtn').onclick = () => {
+          state.timer = (state.timer + 1) % TIMERS.length;
+          const mins = TIMERS[state.timer];
+          document.getElementById('timerBtn').textContent = mins === 0 ? '⏱️ 定时' : `⏱️ ${mins}分`;
+          if(mins > 0) {
+            setTimeout(() => {
+              if(state.playing) this.togglePlay(false);
+              document.getElementById('timerBtn').textContent = '⏱️ 定时';
+            }, mins * 60000);
+          }
+        };
+
+        // Random
+        document.getElementById('randBtn').onclick = () => {
+          const rand = SOUNDS[Math.floor(Math.random() * SOUNDS.length)];
+          this.selectSound(rand.id);
+          if(!state.playing) this.togglePlay(true);
+        };
+
+        // Mixer
+        document.getElementById('mixBtn').onclick = () => {
+          state.mixMode = !state.mixMode;
+          document.getElementById('mixer').classList.toggle('active', state.mixMode);
+          if(state.mixMode && state.mix.length === 0) state.mix = [state.current];
+          this.renderSlots();
+          this.updatePlayState();
+        };
+        document.getElementById('closeMixer').onclick = () => {
+          state.mixMode = false;
+          document.getElementById('mixer').classList.remove('active');
+          this.renderSlots();
+        };
+
+        // Volume slider
+        const track = document.getElementById('xpTrack');
+        const fill = document.getElementById('xpFill');
+        const thumb = document.getElementById('xpThumb');
+        const text = document.getElementById('xpText');
+        
+        let dragging = false;
+        const updateVol = (e) => {
+          const rect = track.getBoundingClientRect();
+          const x = e.clientX || e.touches?.[0].clientX;
+          let pct = (x - rect.left) / rect.width;
+          pct = Math.max(0, Math.min(1, pct));
+          state.volume = Math.round(pct * 100);
+          fill.style.width = pct * 100 + '%';
+          thumb.style.left = pct * 100 + '%';
+          text.textContent = state.volume;
+          Audio.setVolume(state.volume);
+        };
+
+        track.addEventListener('mousedown', (e) => { dragging = true; updateVol(e); });
+        track.addEventListener('touchstart', (e) => { dragging = true; updateVol(e); }, {passive: false});
+        document.addEventListener('mousemove', (e) => { if(dragging) updateVol(e); });
+        document.addEventListener('touchmove', (e) => { if(dragging) { e.preventDefault(); updateVol(e); }}, {passive: false});
+        document.addEventListener('mouseup', () => dragging = false);
+        document.addEventListener('touchend', () => dragging = false);
+      },
+
+      setupGestures() {
+        let sx, sy;
+        const app = document.getElementById('app');
+        
+        app.addEventListener('touchstart', (e) => {
+          sx = e.touches[0].clientX;
+          sy = e.touches[0].clientY;
+        }, {passive: true});
+
+        app.addEventListener('touchend', (e) => {
+          const ex = e.changedTouches[0].clientX;
+          const ey = e.changedTouches[0].clientY;
+          const dx = ex - sx;
+          const dy = ey - sy;
+          
+          if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+            // Horizontal swipe - change category
+            const cats = ['all', 'nature', 'urban', 'noise'];
+            const idx = cats.indexOf(state.category);
+            if(dx > 0 && idx < cats.length-1) state.category = cats[idx+1];
+            else if(dx < 0 && idx > 0) state.category = cats[idx-1];
+            document.querySelector(`[data-cat="${state.category}"]`).click();
+          }
+          else if(Math.abs(dy) > 50) {
+            // Vertical swipe - volume
+            if(dy < 0) state.volume = Math.min(100, state.volume + 10);
+            else state.volume = Math.max(0, state.volume - 10);
+            
+            document.getElementById('xpFill').style.width = state.volume + '%';
+            document.getElementById('xpThumb').style.left = state.volume + '%';
+            document.getElementById('xpText').textContent = state.volume;
+            Audio.setVolume(state.volume);
+          }
+        }, {passive: true});
+      },
+
+      togglePlay(force) {
+        Audio.init();
+        state.playing = typeof force === 'boolean' ? force : !state.playing;
+        this.updatePlayState();
+        if(state.playing) Audio.play(state.mixMode ? state.mix : state.current);
+        else Audio.stopAll();
+      },
+
+      startClock() {
+        const update = () => {
+          const now = new Date();
+          document.getElementById('clock').textContent = 
+            String(now.getHours()).padStart(2,'0') + ':' + 
+            String(now.getMinutes()).padStart(2,'0');
+        };
+        update();
+        setInterval(update, 1000);
+      },
+
+      load() {
+        // Simulate loading
+        let p = 0;
+        const bar = document.getElementById('loadBar');
+        const int = setInterval(() => {
+          p += 20;
+          bar.style.width = p + '%';
+          if(p >= 100) {
+            clearInterval(int);
+            setTimeout(() => {
+              document.getElementById('loader').style.opacity = 0;
+              setTimeout(() => document.getElementById('loader').remove(), 300);
+            }, 200);
+          }
+        }, 100);
+      }
+    };
+
+    // ===================== START =====================
+    window.addEventListener('DOMContentLoaded', () => {
+      Visuals.init();
+      UI.init();
+    });
+  </script>
+</body>
+</html>

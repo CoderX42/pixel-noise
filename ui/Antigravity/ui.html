@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>PixelNoise</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+      :root {
+        /* 天空蓝 / 橡木棕 / 草地绿 / 石头灰 / 夜空蓝 */
+        --sky-blue: #71a0a5;
+        --dirt-brown: #8b5a2b;
+        --grass-green: #556b2f;
+        --stone-gray: #7d7d7d;
+        --night-blue: #1a1a2e;
+
+        --bg-color: var(--sky-blue);
+        --text-color: #ffffff;
+        --panel-bg: rgba(255, 255, 255, 0.2);
+        --btn-bg: var(--dirt-brown);
+        --btn-border-light: #a06d3e;
+        --btn-border-dark: #5c3a1a;
+        --btn-active: var(--grass-green);
+        --btn-active-light: #6b8e23;
+        --btn-active-dark: #3e4f22;
+      }
+
+      [data-theme="dark"] {
+        --bg-color: var(--night-blue);
+        --panel-bg: rgba(0, 0, 0, 0.4);
+        --btn-bg: var(--stone-gray);
+        --btn-border-light: #9e9e9e;
+        --btn-border-dark: #5a5a5a;
+        --btn-active: var(--grass-green);
+      }
+
+      * {
+        box-sizing: border-box;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+        image-rendering: pixelated;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        font-family: "Press Start 2P", monospace;
+      }
+
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.4s steps(5);
+      }
+
+      #bg-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+
+      .ui-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none;
+      }
+
+      .top-bar {
+        padding: 16px;
+        display: flex;
+        justify-content: flex-end;
+        pointer-events: auto;
+      }
+
+      .main-area {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        pointer-events: auto;
+      }
+
+      .sound-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        width: 100%;
+        max-width: 400px;
+      }
+
+      /* Landscape / Tablets 适配 */
+      @media (min-width: 480px) {
+        .sound-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+      @media (orientation: landscape) and (max-height: 600px) {
+        .ui-container {
+          flex-direction: row;
+        }
+        .top-bar {
+          position: absolute;
+          right: 0;
+          top: 0;
+          z-index: 20;
+        }
+        .main-area {
+          flex: 1;
+        }
+        .control-panel {
+          width: 35%;
+          min-width: 250px;
+          height: 100%;
+          border-top: none !important;
+          border-left: 4px solid var(--btn-border-dark);
+          justify-content: center;
+        }
+        .sound-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .pixel-btn {
+        background: var(--btn-bg);
+        border: 4px solid;
+        border-top-color: var(--btn-border-light);
+        border-left-color: var(--btn-border-light);
+        border-bottom-color: var(--btn-border-dark);
+        border-right-color: var(--btn-border-dark);
+        color: #fff;
+        padding: 12px 8px;
+        cursor: pointer;
+        box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        font-size: 10px;
+        transition: transform 0.1s steps(2);
+        min-height: 80px;
+      }
+
+      .pixel-btn:active {
+        border-top-color: var(--btn-border-dark);
+        border-left-color: var(--btn-border-dark);
+        border-bottom-color: var(--btn-border-light);
+        border-right-color: var(--btn-border-light);
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+        transform: translate(4px, 4px);
+      }
+
+      .pixel-btn.active {
+        background: var(--btn-active);
+        border-top-color: var(--btn-active-light);
+        border-left-color: var(--btn-active-light);
+        border-bottom-color: var(--btn-active-dark);
+        border-right-color: var(--btn-active-dark);
+      }
+
+      .pixel-icon {
+        width: 32px;
+        height: 32px;
+        shape-rendering: crispEdges; /* 消除 SVG 锯齿 */
+      }
+
+      .control-panel {
+        background: var(--panel-bg);
+        border-top: 4px solid var(--btn-border-dark);
+        padding: 20px 16px;
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        backdrop-filter: blur(4px);
+        min-height: 15vh;
+      }
+
+      .controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        max-width: 600px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      .play-btn {
+        width: 48px;
+        height: 48px;
+        min-height: 48px;
+        font-size: 16px;
+        padding: 0;
+        flex-shrink: 0;
+      }
+
+      .slider-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 8px 12px;
+        border: 2px solid var(--btn-border-dark);
+      }
+
+      input[type="range"] {
+        -webkit-appearance: none;
+        width: 100%;
+        background: transparent;
+        min-width: 100px;
+      }
+      input[type="range"]:focus {
+        outline: none;
+      }
+
+      input[type="range"]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 16px;
+        background: #222;
+        border: 2px solid #555;
+        cursor: pointer;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        height: 32px;
+        width: 16px;
+        background: var(--btn-bg);
+        border: 4px solid;
+        border-top-color: var(--btn-border-light);
+        border-left-color: var(--btn-border-light);
+        border-bottom-color: var(--btn-border-dark);
+        border-right-color: var(--btn-border-dark);
+        cursor: pointer;
+        -webkit-appearance: none;
+        margin-top: -10px;
+      }
+
+      #theme-btn {
+        width: 40px;
+        height: 40px;
+        min-height: 40px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="ui-container">
+      <div class="top-bar">
+        <button id="theme-btn" class="pixel-btn">☀</button>
+      </div>
+
+      <div class="main-area">
+        <div class="sound-grid" id="sound-grid">
+          <!-- 由 JavaScript 初始化 -->
+        </div>
+      </div>
+
+      <div class="control-panel">
+        <div class="controls-row">
+          <button id="play-btn" class="pixel-btn play-btn">▶</button>
+          <div class="slider-wrapper">
+            <span style="font-size: 12px">🔈</span>
+            <input
+              type="range"
+              id="vol-slider"
+              min="0"
+              max="100"
+              step="5"
+              value="50"
+            />
+            <span
+              id="vol-text"
+              style="font-size: 10px; width: 3ch; text-align: right"
+              >50</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- 模型与状态配置 ---
+      // 使用 SVG path 在 16x16 的像素格子里描绘经典物品
+      const SOUNDS = [
+        {
+          id: "rain",
+          name: "雨声",
+          icon: "M6 2h4v2H6zm-2 4h2v2H4zm6 0h2v2h-2zm-4 4h2v2H6zm6 0h2v2h-2zm-4 4h2v2H8z",
+        },
+        {
+          id: "forest",
+          name: "森林",
+          icon: "M7 1h2v2H7zM5 3h6v2H5zM3 5h10v2H3zM1 7h14v2H1zM7 9h2v6H7z",
+        },
+        {
+          id: "waves",
+          name: "海浪",
+          icon: "M1 9h2v2H1zm2-2h2v2H3zm2-2h2v2H5zm2-2h2v2H7zm2 2h2v2H9zm2 2h2v2h-2zm2 2h2v2h-2zM4 12h8v2H4zm-3-2h3v2H1z",
+        },
+        {
+          id: "cafe",
+          name: "营火",
+          icon: "M6 2h4v2H6zM4 4h2v2H4zm4 0h2v4H8zM2 6h2v6H2zm4 4h2v4H6zm-2 4h8v2H4z",
+        },
+        {
+          id: "noise",
+          name: "纯噪",
+          icon: "M2 2h2v2H2zm4 0h2v2H6zm4 0h2v2h-2zm-6 4h2v2H4zm4 0h2v2H8zm4 0h2v2h-2zm-6 4h2v2H6zm4 0h2v2h-2zm-6 4h2v2H4zm4 0h2v2H8z",
+        },
+      ];
+
+      const DB = {
+        get: () => {
+          try {
+            return JSON.parse(localStorage.getItem("pixelNoise")) || {};
+          } catch (e) {
+            return {};
+          }
+        },
+        set: (data) => localStorage.setItem("pixelNoise", JSON.stringify(data)),
+      };
+
+      const state = {
+        sound: DB.get().sound || "rain",
+        volume: DB.get().volume ?? 50,
+        theme: DB.get().theme || "light",
+        playing: false,
+      };
+
+      const els = {
+        grid: document.getElementById("sound-grid"),
+        play: document.getElementById("play-btn"),
+        vol: document.getElementById("vol-slider"),
+        volt: document.getElementById("vol-text"),
+        theme: document.getElementById("theme-btn"),
+        body: document.body,
+        cvs: document.getElementById("bg-canvas"),
+      };
+      const ctx = els.cvs.getContext("2d", { alpha: false });
+
+      // --- 音频合成引擎 (使用 Web Audio API 原生合成音) ---
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      let actx;
+      let masterGain;
+      let activeNodes = [];
+
+      const initAudio = () => {
+        if (actx) return;
+        actx = new AudioCtx();
+        masterGain = actx.createGain();
+        masterGain.connect(actx.destination);
+        applyVolume();
+      };
+
+      const applyVolume = () => {
+        state.volume = parseInt(els.vol.value);
+        els.volt.innerText = state.volume;
+        // 指数曲线可让音量更自然
+        if (masterGain && actx)
+          masterGain.gain.setValueAtTime(
+            Math.pow(state.volume / 100, 2),
+            actx.currentTime,
+          );
+        DB.set({
+          sound: state.sound,
+          volume: state.volume,
+          theme: state.theme,
+        });
+      };
+
+      const stopAll = () => {
+        activeNodes.forEach((n) => {
+          try {
+            if (n.stop) n.stop();
+            if (n.disconnect) n.disconnect();
+          } catch (e) {}
+        });
+        activeNodes = [];
+      };
+
+      // 核心白噪发生器
+      const makeNoise = (type) => {
+        const bufSize = actx.sampleRate * 2;
+        const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+        const out = buf.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < bufSize; i++) {
+          let white = Math.random() * 2 - 1;
+          if (type === "brown") {
+            out[i] = (last + 0.02 * white) / 1.02;
+            last = out[i];
+            out[i] *= 3.5;
+          } else if (type === "pink") {
+            out[i] = white * 0.15;
+          } else {
+            out[i] = white * 0.5;
+          }
+        }
+        return buf;
+      };
+
+      const generators = {
+        rain: () => {
+          // 滤后的粉噪模拟下雨
+          const src = actx.createBufferSource();
+          src.buffer = makeNoise("pink");
+          src.loop = true;
+          const f = actx.createBiquadFilter();
+          f.type = "lowpass";
+          f.frequency.value = 1000;
+          src.connect(f);
+          f.connect(masterGain);
+          src.start();
+          activeNodes.push(src, f);
+        },
+        forest: () => {
+          // 风声 + 随机类似鸟鸣的振荡器
+          const src = actx.createBufferSource();
+          src.buffer = makeNoise("pink");
+          src.loop = true;
+          const f = actx.createBiquadFilter();
+          f.type = "lowpass";
+          f.frequency.value = 600;
+          src.connect(f);
+          f.connect(masterGain);
+          src.start();
+          activeNodes.push(src, f);
+
+          const osc = actx.createOscillator();
+          const g = actx.createGain();
+          g.gain.value = 0;
+          osc.connect(g);
+          g.connect(masterGain);
+          osc.start();
+          activeNodes.push(osc, g);
+          setInterval(() => {
+            if (!state.playing || state.sound !== "forest") return;
+            if (Math.random() > 0.4 && actx.state === "running") {
+              osc.frequency.setValueAtTime(
+                2000 + Math.random() * 1500,
+                actx.currentTime,
+              );
+              g.gain.setValueAtTime(0.1, actx.currentTime);
+              g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+              g.gain.setValueAtTime(0, actx.currentTime + 0.11);
+            }
+          }, 800);
+        },
+        waves: () => {
+          // 海浪，用 LFO 低频振荡器改变低通滤波
+          const src = actx.createBufferSource();
+          src.buffer = makeNoise("pink");
+          src.loop = true;
+          const f = actx.createBiquadFilter();
+          f.type = "lowpass";
+          f.frequency.value = 800;
+
+          const lfo = actx.createOscillator();
+          lfo.frequency.value = 0.1; // 海浪大概10秒一个波
+          const lfoG = actx.createGain();
+          lfoG.gain.value = 600;
+          lfo.connect(lfoG);
+          lfoG.connect(f.frequency);
+
+          const am = actx.createOscillator();
+          am.frequency.value = 0.1;
+          const amG = actx.createGain();
+          am.connect(amG.gain);
+
+          src.connect(f);
+          f.connect(amG);
+          amG.connect(masterGain);
+          src.start();
+          lfo.start();
+          am.start();
+          activeNodes.push(src, f, lfo, lfoG, am, amG);
+        },
+        cafe: () => {
+          // 较粗的褐噪模拟燃烧的篝火或温暖的室内
+          const src = actx.createBufferSource();
+          src.buffer = makeNoise("brown");
+          src.loop = true;
+          const f = actx.createBiquadFilter();
+          f.type = "lowpass";
+          f.frequency.value = 350;
+          src.connect(f);
+          f.connect(masterGain);
+          src.start();
+          activeNodes.push(src, f);
+        },
+        noise: () => {
+          // 经典的纯白噪
+          const src = actx.createBufferSource();
+          src.buffer = makeNoise("white");
+          src.loop = true;
+          const f = actx.createBiquadFilter();
+          f.type = "lowpass";
+          f.frequency.value = 4000;
+          src.connect(f);
+          f.connect(masterGain);
+          src.start();
+          activeNodes.push(src, f);
+        },
+      };
+
+      const playEngine = () => {
+        if (!actx) initAudio();
+        if (actx.state === "suspended") actx.resume();
+        stopAll();
+        if (generators[state.sound]) generators[state.sound]();
+      };
+
+      // --- UI 事件响应与状态管理 ---
+      const updateUI = () => {
+        els.body.setAttribute("data-theme", state.theme);
+        els.theme.innerText = state.theme === "light" ? "🌙" : "☀";
+        els.play.innerText = state.playing ? "⏸" : "▶";
+        els.play.classList.toggle("active", state.playing);
+        els.vol.value = state.volume;
+        els.volt.innerText = state.volume;
+
+        document.querySelectorAll(".sound-grid .pixel-btn").forEach((b) => {
+          b.classList.toggle("active", b.dataset.id === state.sound);
+        });
+        DB.set(state);
+      };
+
+      SOUNDS.forEach((s) => {
+        const b = document.createElement("button");
+        b.className = "pixel-btn";
+        b.dataset.id = s.id;
+        b.innerHTML = `<svg class="pixel-icon" viewBox="0 0 16 16" fill="currentColor"><path d="${s.icon}"/></svg><div>${s.name}</div>`;
+        b.onclick = () => {
+          state.sound = s.id;
+          updateUI();
+          if (state.playing) playEngine();
+          createBurst(); // 增加点击时的粒子反馈效果
+        };
+        els.grid.appendChild(b);
+      });
+
+      els.play.onclick = () => {
+        state.playing = !state.playing;
+        updateUI();
+        if (state.playing) playEngine();
+        else stopAll();
+      };
+
+      els.vol.oninput = () => {
+        state.volume = els.vol.value;
+        applyVolume();
+      };
+
+      els.theme.onclick = () => {
+        // 主题切换
+        state.theme = state.theme === "light" ? "dark" : "light";
+        updateUI();
+      };
+
+      // 通过点击解除 Web Audio 保护机制
+      document.body.addEventListener(
+        "click",
+        () => {
+          if (actx && actx.state === "suspended" && state.playing) playEngine();
+        },
+        { once: true },
+      );
+
+      // --- 背景 2D 像素引擎 (固定逻辑分辨率320x480) ---
+      const W = 320;
+      const H = 480;
+      els.cvs.width = W;
+      els.cvs.height = H;
+
+      let entities = [];
+      let interactPts = [];
+
+      const createBurst = () => {
+        for (let i = 0; i < 15; i++) {
+          entities.push({
+            x: W / 2,
+            y: H / 2,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 0,
+            max: 20,
+          });
+        }
+      };
+
+      els.cvs.addEventListener("click", (e) => {
+        // 将鼠标屏幕坐标投射至 Canvas 坐标系
+        const rect = els.cvs.getBoundingClientRect();
+        const sx = W / rect.width;
+        const sy = H / rect.height;
+        const cx = (e.clientX - rect.left) * sx;
+        const cy = (e.clientY - rect.top) * sy;
+
+        interactPts.push({ x: cx, y: cy, r: 2, max: 40 + Math.random() * 20 });
+        if (actx && actx.state === "suspended" && state.playing) playEngine();
+      });
+
+      let lastT = 0;
+      const loop = (t) => {
+        requestAnimationFrame(loop);
+        if (t - lastT < 33.3) return; // 限制在约 30FPS 产生极简复古卡顿感
+        lastT = t;
+
+        // 绘制背景底色
+        const bgColor = getComputedStyle(els.body)
+          .getPropertyValue("--bg-color")
+          .trim();
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, W, H);
+
+        // 补充粒子
+        if (entities.length < 60) {
+          entities.push({
+            x: Math.random() * W,
+            y:
+              state.sound === "rain" || state.sound === "noise"
+                ? 0
+                : state.sound === "forest" || state.sound === "waves"
+                  ? Math.random() * H
+                  : H,
+            vx: state.sound === "rain" ? 2 : state.sound === "waves" ? 3 : 0,
+            vy:
+              state.sound === "rain"
+                ? 8
+                : state.sound === "cafe"
+                  ? -1
+                  : Math.random() - 0.5,
+            life: 0,
+            max: 40 + Math.random() * 60,
+            type: state.sound,
+          });
+        }
+
+        // 更新和绘制主粒子 (不同环境不同绘制策略)
+        ctx.fillStyle =
+          state.theme === "dark" ? "#E8E8E8" : "rgba(255,255,255,0.8)";
+        if (state.sound === "cafe") ctx.fillStyle = "#FFA500"; // 篝火色
+        if (state.theme === "light" && state.sound === "rain")
+          ctx.fillStyle = "#4A7A85";
+
+        for (let i = entities.length - 1; i >= 0; i--) {
+          let p = entities[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life++;
+
+          if (p.type === "cafe") {
+            p.x += Math.sin(p.life * 0.1); // 火焰波动
+          } else if (p.type === "noise") {
+            p.x = Math.random() * W;
+            p.y = Math.random() * H; // 纯雪花块
+          }
+
+          if (p.life > p.max || p.y > H || p.y < 0 || p.x > W) {
+            entities.splice(i, 1);
+            continue;
+          }
+
+          // 使用块状 4x4 （渲染为大像素方块）
+          let s = p.type === "rain" ? 2 : 4;
+          ctx.fillRect(Math.floor(p.x / s) * s, Math.floor(p.y / s) * s, s, s);
+        }
+
+        // 绘制交互涟漪反馈
+        ctx.strokeStyle = state.theme === "dark" ? "#FFF" : "#333";
+        ctx.lineWidth = 2;
+        for (let i = interactPts.length - 1; i >= 0; i--) {
+          let r = interactPts[i];
+          r.r += 3;
+          if (r.r > r.max) {
+            interactPts.splice(i, 1);
+            continue;
+          }
+          ctx.strokeRect(r.x - r.r, r.y - r.r, r.r * 2, r.r * 2); // 方块扩张特效
+        }
+      };
+
+      // 启动系统
+      updateUI();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

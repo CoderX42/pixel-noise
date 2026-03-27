@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="PixelAmbient - Minecraft像素风格白噪音应用">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>PixelAmbient - 像素白噪音</title>
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlBpeGVsQW1iaWVudCIsCiAgInNob3J0X25hbWUiOiAiUGl4ZWxBTVIiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXlfdHlwZSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMWExYTJjIiwKICAidGhlbWVfY29sb3IiOiAiI2U5NDU2MCIsCiAgImljb25zIjogWwogICAgewogICAgICAicGF0aCI6ICIuIiwKICAgICAgInNpemUiOiAiNTEycHgiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmcKICAgIH0KICBdCn0=">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --card-bg: #0f3460;
+      --accent: #e94560;
+      --accent-glow: rgba(233, 69, 96, 0.5);
+      --text-primary: #f0f0f0;
+      --text-secondary: #a0a0a0;
+      --pixel-border: 4px;
+      --shadow-pixel: 4px 4px 0 rgba(0, 0, 0, 0.5);
+      --shadow-inset: inset 4px 4px 0 rgba(0, 0, 0, 0.3);
+      --transition-fast: 0.1s;
+      --transition-normal: 0.3s;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'VT323', monospace;
+      background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--text-primary);
+    }
+
+    /* Loading Screen */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loading-title {
+      font-family: 'Press Start 2P', cursive;
+      font-size: clamp(16px, 4vw, 24px);
+      color: var(--accent);
+      text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.02); }
+    }
+
+    .loading-bar-container {
+      width: 80%;
+      max-width: 400px;
+      height: 24px;
+      background: var(--bg-secondary);
+      border: 4px solid var(--accent);
+      box-shadow: var(--shadow-pixel);
+      padding: 4px;
+    }
+
+    .loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent) 0%, #ff6b8a 100%);
+      transition: width 0.3s ease;
+    }
+
+    .loading-text {
+      font-size: 20px;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+    }
+
+    /* Main App */
+    .app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .app.loaded {
+      opacity: 1;
+    }
+
+    /* Canvas Background */
+    #bgCanvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Header */
+    .header {
+      flex-shrink: 0;
+      height: auto;
+      min-height: 60px;
+      padding: 12px 16px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+      z-index: 100;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .logo {
+      font-family: 'Press Start 2P', cursive;
+      font-size: clamp(14px, 3vw, 20px);
+      color: var(--accent);
+      text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+      letter-spacing: 1px;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mc-clock {
+      font-size: 24px;
+      color: var(--text-primary);
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px 12px;
+      border: 2px solid var(--accent);
+    }
+
+    /* Pixel Button */
+    .mc-btn {
+      background: var(--card-bg);
+      border: 4px solid;
+      border-color: #4a6a9a #2a4a7a #2a4a7a #4a6a9a;
+      color: var(--text-primary);
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      padding: 8px 16px;
+      min-height: 44px;
+      min-width: 44px;
+      cursor: pointer;
+      box-shadow: var(--shadow-pixel);
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .mc-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    .mc-btn.accent {
+      background: var(--accent);
+      border-color: #ff8a9a #b93050 #b93050 #ff8a9a;
+    }
+
+    .mc-btn.square {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 20px;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 10;
+    }
+
+    .sound-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      max-width: 100%;
+    }
+
+    /* Sound Card */
+    .sound-card {
+      background: var(--card-bg);
+      border: var(--pixel-border) solid var(--accent);
+      box-shadow: var(--shadow-pixel);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      min-height: 120px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sound-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .sound-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    .sound-card.active {
+      border-color: #00ff88;
+      box-shadow: 0 0 20px var(--accent-glow), var(--shadow-pixel);
+    }
+
+    .sound-card.active .glow-effect {
+      opacity: 1;
+    }
+
+    .glow-effect {
+      position: absolute;
+      inset: -2px;
+      background: radial-gradient(ellipse at center, rgba(0, 255, 136, 0.2) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity var(--transition-normal);
+      pointer-events: none;
+    }
+
+    .sound-icon {
+      font-size: 32px;
+      line-height: 1;
+      filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5));
+    }
+
+    .sound-name {
+      font-size: 16px;
+      text-align: center;
+      color: var(--text-primary);
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+      letter-spacing: 1px;
+    }
+
+    .volume-slider {
+      width: 100%;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #3a5a8a;
+      position: relative;
+      cursor: pointer;
+      box-shadow: var(--shadow-inset);
+    }
+
+    .volume-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent) 0%, #ff8a9a 100%);
+      transition: width 0.1s ease;
+    }
+
+    .volume-thumb {
+      position: absolute;
+      top: 50%;
+      width: 8px;
+      height: 16px;
+      background: #ff4444;
+      border: 2px solid #aa2222;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      width: 40px;
+      height: 20px;
+      background: #333;
+      border: 2px solid #555;
+      cursor: pointer;
+      position: relative;
+      box-shadow: var(--shadow-inset);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: #888;
+      border: 2px solid #666;
+      transition: all var(--transition-fast);
+    }
+
+    .toggle-switch.active {
+      background: #005500;
+      border-color: #00aa00;
+    }
+
+    .toggle-switch.active::after {
+      left: 22px;
+      background: #00ff00;
+      border-color: #00aa00;
+    }
+
+    /* Bottom Controls */
+    .bottom-controls {
+      flex-shrink: 0;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 100;
+    }
+
+    .master-volume {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .master-label {
+      font-size: 18px;
+      color: var(--text-secondary);
+      min-width: 80px;
+    }
+
+    .master-slider {
+      flex: 1;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 3px solid #4a6a9a;
+      position: relative;
+      cursor: pointer;
+      box-shadow: var(--shadow-inset);
+    }
+
+    .master-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88 0%, #00cc66 100%);
+      transition: width 0.1s ease;
+    }
+
+    .master-thumb {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 24px;
+      background: #00ff88;
+      border: 3px solid #00aa55;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    .control-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Landscape Mode */
+    @media (orientation: landscape) and (min-width: 768px) {
+      .app {
+        flex-direction: row;
+      }
+
+      .main-content {
+        flex: 1;
+        overflow-y: auto;
+      }
+
+      .bottom-controls {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 300px;
+        background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, var(--bg-primary) 100%);
+        flex-direction: column;
+        justify-content: center;
+        padding: 24px;
+        padding-bottom: max(24px, env(safe-area-inset-bottom));
+      }
+
+      .sound-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+
+      .sound-card {
+        min-height: 100px;
+      }
+
+      #bgCanvas {
+        width: calc(100% - 300px);
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 500px) {
+      .sound-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+      }
+
+      .sound-card {
+        min-height: 80px;
+        padding: 8px;
+      }
+
+      .sound-icon {
+        font-size: 24px;
+      }
+
+      .sound-name {
+        font-size: 14px;
+      }
+    }
+
+    /* Tablet */
+    @media (min-width: 768px) and (orientation: portrait) {
+      .sound-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+
+      .sound-card {
+        min-height: 130px;
+      }
+    }
+
+    /* Mobile Small */
+    @media (max-width: 480px) {
+      .sound-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .sound-card {
+        min-height: 100px;
+        padding: 8px;
+      }
+
+      .sound-icon {
+        font-size: 24px;
+      }
+
+      .sound-name {
+        font-size: 14px;
+      }
+
+      .logo {
+        font-size: 12px;
+      }
+
+      .mc-clock {
+        font-size: 18px;
+      }
+    }
+
+    /* Quiet Night Mode */
+    .app.quiet-night {
+      --accent: #6a6a9a;
+    }
+
+    .app.quiet-night .sound-card:not(.active) {
+      opacity: 0.7;
+    }
+
+    /* Pixel Grid Overlay */
+    .pixel-grid-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loading-title">正在生成世界...</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loadingBar"></div>
+    </div>
+    <div class="loading-text" id="loadingText">初始化音频引擎</div>
+  </div>
+
+  <!-- Main App -->
+  <div class="app" id="app">
+    <canvas id="bgCanvas"></canvas>
+    <div class="pixel-grid-overlay"></div>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">PixelAmbient</div>
+      <div class="header-controls">
+        <div class="mc-clock" id="mcClock">00:00</div>
+        <button class="mc-btn accent square" id="quietNightBtn" title="静夜模式">🌙</button>
+        <button class="mc-btn square" id="randomBtn" title="随机混合">🎲</button>
+        <button class="mc-btn square" id="pauseAllBtn" title="暂停全部">⏸</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="sound-grid" id="soundGrid"></div>
+    </main>
+
+    <!-- Bottom Controls -->
+    <div class="bottom-controls">
+      <div class="master-volume">
+        <span class="master-label">主音量</span>
+        <div class="master-slider" id="masterSlider">
+          <div class="master-fill" id="masterFill" style="width: 70%;"></div>
+          <div class="master-thumb" id="masterThumb" style="left: 70%;"></div>
+        </div>
+      </div>
+      <div class="control-buttons">
+        <button class="mc-btn" id="randomBtn2">🎲 随机</button>
+        <button class="mc-btn accent" id="pauseAllBtn2">⏸ 暂停全部</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===================== SOUND DATA =====================
+    const SOUNDS = [
+      { id: 'whiteNoise', name: '白噪音', icon: '📻', type: 'noise', color: '#ffffff' },
+      { id: 'brownNoise', name: '棕噪音', icon: '🟤', type: 'noise', color: '#8b4513' },
+      { id: 'blueNoise', name: '蓝噪音', icon: '🔵', type: 'noise', color: '#4169e1' },
+      { id: 'ocean', name: '海洋', icon: '🌊', type: 'water', color: '#1e90ff' },
+      { id: 'rain', name: '雨声', icon: '🌧️', type: 'water', color: '#87ceeb' },
+      { id: 'stream', name: '溪流', icon: '💧', type: 'water', color: '#00ced1' },
+      { id: 'roofRain', name: '屋顶雨', icon: '🏠', type: 'water', color: '#696969' },
+      { id: 'night', name: '夜晚', icon: '🌃', type: 'nature', color: '#483d8b' },
+      { id: 'fire', name: '火苗', icon: '🔥', type: 'fire', color: '#ff4500' },
+      { id: 'airplane', name: '飞机', icon: '✈️', type: 'mechanical', color: '#c0c0c0' },
+      { id: 'steam', name: '蒸汽', icon: '💨', type: 'mechanical', color: '#b0c4de' },
+      { id: 'ship', name: '船舶', icon: '🚢', type: 'mechanical', color: '#4682b4' },
+      { id: 'bus', name: '公交', icon: '🚌', type: 'mechanical', color: '#ffa500' },
+      { id: 'train', name: '火车', icon: '🚂', type: 'mechanical', color: '#8b0000' },
+      { id: 'quietNight', name: '静夜', icon: '🌙', type: 'special', color: '#4a4a6a' }
+    ];
+
+    // ===================== AUDIO ENGINE =====================
+    class AudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.soundNodes = {};
+        this.soundGains = {};
+        this.quietNightActive = false;
+      }
+
+      async init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.connect(this.ctx.destination);
+        this.masterGain.gain.value = 0.7;
+
+        // Resume context for mobile
+        if (this.ctx.state === 'suspended') {
+          await this.ctx.resume();
+        }
+      }
+
+      setMasterVolume(value) {
+        if (this.masterGain) {
+          this.masterGain.gain.setTargetAtTime(value, this.ctx.currentTime, 0.1);
+        }
+      }
+
+      // White Noise (Balanced)
+      createWhiteNoise(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3000;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.5;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain] };
+      }
+
+      // Brown Noise (Red Noise, 1/f²)
+      createBrownNoise(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          data[i] = (lastOut + (0.02 * white)) / 1.02;
+          lastOut = data[i];
+          data[i] *= 3.5;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 500;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.5;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain] };
+      }
+
+      // Blue Noise (High-pass white noise)
+      createBlueNoise(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 2000;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.4;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain] };
+      }
+
+      // Rain Sound
+      createRain(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1000;
+        filter.Q.value = 0.5;
+
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.value = 0.1;
+        lfoGain.gain.value = 0.2;
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.6;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+        lfo.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain, lfo, lfoGain] };
+      }
+
+      // Ocean Sound
+      createOcean(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 600;
+
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.value = 0.08;
+        lfoGain.gain.value = 0.4;
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+
+        const gainNode = this.ctx.createGain();
+        gainNode.gain.value = 0.5;
+
+        const gainLfo = this.ctx.createOscillator();
+        const gainLfoGain = this.ctx.createGain();
+        gainLfo.frequency.value = 0.08;
+        gainLfoGain.gain.value = 0.2;
+        gainLfo.connect(gainLfoGain);
+        gainLfoGain.connect(gainNode.gain);
+
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+        source.start();
+        lfo.start();
+        gainLfo.start();
+
+        return { source, filter, gainNode, nodes: [source, filter, gainNode, lfo, lfoGain, gainLfo, gainLfoGain] };
+      }
+
+      // Stream Sound
+      createStream(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2000;
+        filter.Q.value = 1;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.4;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain] };
+      }
+
+      // Roof Rain (heavier rain sound)
+      createRoofRain(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.7;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain] };
+      }
+
+      // Night Sound (Crickets + Stars)
+      createNight(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 4000;
+        filter.Q.value = 5;
+
+        const crickets = [];
+        for (let i = 0; i < 3; i++) {
+          const osc = this.ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = 4000 + Math.random() * 1000;
+
+          const cricketGain = this.ctx.createGain();
+          cricketGain.gain.value = 0;
+
+          const cricketLfo = this.ctx.createOscillator();
+          cricketLfo.frequency.value = 10 + Math.random() * 5;
+          const cricketLfoGain = this.ctx.createGain();
+          cricketLfoGain.gain.value = 0.03;
+          cricketLfo.connect(cricketLfoGain);
+          cricketLfoGain.connect(cricketGain.gain);
+
+          osc.connect(cricketGain);
+          cricketGain.connect(this.masterGain);
+          osc.start();
+          cricketLfo.start();
+
+          crickets.push({ osc, cricketGain, cricketLfo, cricketLfoGain });
+        }
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.3;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+
+        return { source, filter, gain, crickets, nodes: [source, filter, gain, ...crickets.flatMap(c => [c.osc, c.cricketGain, c.cricketLfo, c.cricketLfoGain])] };
+      }
+
+      // Fire Sound
+      createFire(id) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          data[i] = (lastOut + (0.02 * white)) / 1.02;
+          lastOut = data[i];
+          data[i] *= 3.5;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 400;
+
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.value = 8;
+        lfoGain.gain.value = 0.15;
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.5;
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
+        lfo.start();
+
+        return { source, filter, gain, nodes: [source, filter, gain, lfo, lfoGain] };
+      }
+
+      // Mechanical Sounds (Airplane, Train, Bus, Ship, Steam)
+      createMechanicalSound(id, baseFreq, noiseFreq, modFreq) {
+        const bufferSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = noiseFreq;
+        noiseFilter.Q.value = 2;
+
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = baseFreq;
+
+        const oscFilter = this.ctx.createBiquadFilter();
+        oscFilter.type = 'lowpass';
+        oscFilter.frequency.value = baseFreq * 2;
+
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.value = modFreq;
+        lfoGain.gain.value = baseFreq * 0.1;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.value = 0.4;
+
+        const oscGain = this.ctx.createGain();
+        oscGain.gain.value = 0.2;
+
+        const mixGain = this.ctx.createGain();
+        mixGain.gain.value = 0.5;
+
+        source.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(mixGain);
+
+        osc.connect(oscFilter);
+        oscFilter.connect(oscGain);
+        oscGain.connect(mixGain);
+
+        mixGain.connect(this.masterGain);
+
+        source.start();
+        osc.start();
+        lfo.start();
+
+        return { source, osc, noiseFilter, oscFilter, noiseGain, oscGain, mixGain, nodes: [source, osc, noiseFilter, oscFilter, noiseGain, oscGain, mixGain, lfo, lfoGain] };
+      }
+
+      // Generic sound creator
+      createSound(id, type) {
+        switch (type) {
+          case 'noise':
+            if (id === 'whiteNoise') return this.createWhiteNoise(id);
+            if (id === 'brownNoise') return this.createBrownNoise(id);
+            if (id === 'blueNoise') return this.createBlueNoise(id);
+            break;
+          case 'water':
+            if (id === 'rain') return this.createRain(id);
+            if (id === 'ocean') return this.createOcean(id);
+            if (id === 'stream') return this.createStream(id);
+            if (id === 'roofRain') return this.createRoofRain(id);
+            break;
+          case 'nature':
+            if (id === 'night') return this.createNight(id);
+            if (id === 'fire') return this.createFire(id);
+            break;
+          case 'mechanical':
+            const configs = {
+              airplane: { baseFreq: 120, noiseFreq: 800, modFreq: 0.5 },
+              steam: { baseFreq: 80, noiseFreq: 600, modFreq: 2 },
+              ship: { baseFreq: 60, noiseFreq: 400, modFreq: 0.2 },
+              bus: { baseFreq: 100, noiseFreq: 700, modFreq: 1.5 },
+              train: { baseFreq: 90, noiseFreq: 500, modFreq: 0.8 }
+            };
+            return this.createMechanicalSound(id, configs[id].baseFreq, configs[id].noiseFreq, configs[id].modFreq);
+          case 'special':
+            if (id === 'quietNight') {
+              this.quietNightActive = !this.quietNightActive;
+              if (this.quietNightActive) {
+                this.reduceOtherSounds(0.8);
+                document.getElementById('app').classList.add('quiet-night');
+              } else {
+                this.restoreOtherSounds();
+                document.getElementById('app').classList.remove('quiet-night');
+              }
+              return null;
+            }
+            break;
+        }
+        return null;
+      }
+
+      reduceOtherSounds(factor) {
+        Object.keys(this.soundGains).forEach(id => {
+          if (this.soundGains[id] && id !== 'quietNight') {
+            this.soundGains[id].gain.setTargetAtTime(
+              this.soundGains[id]._originalVolume * factor,
+              this.ctx.currentTime,
+              0.5
+            );
+          }
+        });
+      }
+
+      restoreOtherSounds() {
+        Object.keys(this.soundGains).forEach(id => {
+          if (this.soundGains[id] && this.soundGains[id]._originalVolume !== undefined) {
+            this.soundGains[id].gain.setTargetAtTime(
+              this.soundGains[id]._originalVolume,
+              this.ctx.currentTime,
+              0.5
+            );
+          }
+        });
+      }
+
+      playSound(id, type) {
+        if (!this.ctx) return;
+        if (this.soundNodes[id]) return;
+
+        const sound = this.createSound(id, type);
+        if (!sound) return;
+
+        this.soundNodes[id] = sound;
+        this.soundGains[id] = sound.gain || sound.gainNode;
+        if (this.soundGains[id]) {
+          this.soundGains[id]._originalVolume = 0.5;
+        }
+      }
+
+      stopSound(id) {
+        if (!this.soundNodes[id]) return;
+
+        const nodes = this.soundNodes[id].nodes || [];
+        nodes.forEach(node => {
+          try {
+            if (node.stop) node.stop();
+            if (node.disconnect) node.disconnect();
+          } catch (e) {}
+        });
+
+        delete this.soundNodes[id];
+        delete this.soundGains[id];
+      }
+
+      setVolume(id, value) {
+        if (this.soundGains[id]) {
+          this.soundGains[id].gain.setTargetAtTime(value, this.ctx.currentTime, 0.1);
+          this.soundGains[id]._originalVolume = value;
+        }
+      }
+
+      stopAll() {
+        Object.keys(this.soundNodes).forEach(id => {
+          this.stopSound(id);
+        });
+        if (this.quietNightActive) {
+          this.quietNightActive = false;
+          document.getElementById('app').classList.remove('quiet-night');
+        }
+      }
+    }
+
+    // ===================== VISUAL ENGINE =====================
+    class VisualEngine {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.particles = [];
+        this.activeEffects = new Set();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      clearEffects() {
+        this.activeEffects.clear();
+        this.particles = [];
+      }
+
+      addEffect(type) {
+        this.activeEffects.add(type);
+      }
+
+      removeEffect(type) {
+        this.activeEffects.delete(type);
+      }
+
+      update() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw gradient background
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(1, '#16213e');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw effects
+        if (this.activeEffects.has('rain') || this.activeEffects.has('roofRain')) {
+          this.drawRain();
+        }
+        if (this.activeEffects.has('fire')) {
+          this.drawFire();
+        }
+        if (this.activeEffects.has('night') || this.activeEffects.has('quietNight')) {
+          this.drawStars();
+        }
+        if (this.activeEffects.has('ocean')) {
+          this.drawWaves();
+        }
+        if (this.activeEffects.has('stream')) {
+          this.drawStream();
+        }
+        if (this.activeEffects.has('steam')) {
+          this.drawSteam();
+        }
+      }
+
+      drawRain() {
+        const intensity = this.activeEffects.has('rain') ? 1 : 0.5;
+        while (this.particles.length < 100 * intensity) {
+          this.particles.push({
+            type: 'rain',
+            x: Math.random() * this.canvas.width,
+            y: Math.random() * -100,
+            speed: 8 + Math.random() * 8,
+            length: 10 + Math.random() * 20
+          });
+        }
+
+        this.ctx.strokeStyle = 'rgba(135, 206, 235, 0.6)';
+        this.ctx.lineWidth = 2;
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          if (p.type !== 'rain') continue;
+          p.y += p.speed;
+          p.x += p.speed * 0.1;
+          this.ctx.beginPath();
+          this.ctx.moveTo(p.x, p.y);
+          this.ctx.lineTo(p.x - 2, p.y - p.length);
+          this.ctx.stroke();
+          if (p.y > this.canvas.height) this.particles.splice(i, 1);
+        }
+      }
+
+      drawFire() {
+        while (this.particles.length < 50) {
+          this.particles.push({
+            type: 'fire',
+            x: this.canvas.width / 2 + (Math.random() - 0.5) * 100,
+            y: this.canvas.height,
+            speed: 2 + Math.random() * 3,
+            size: 4 + Math.random() * 4,
+            life: 60 + Math.random() * 40
+          });
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          if (p.type !== 'fire') continue;
+          p.y -= p.speed;
+          p.x += Math.sin(p.y * 0.05) * 0.5;
+          p.life--;
+
+          const alpha = p.life / 100;
+          const colors = ['#ff4500', '#ff6600', '#ffaa00', '#ffff00'];
+          this.ctx.fillStyle = colors[Math.floor(p.life / 20)] || colors[0];
+          this.ctx.globalAlpha = alpha;
+          this.ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+          this.ctx.globalAlpha = 1;
+
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+      }
+
+      drawStars() {
+        const time = Date.now() * 0.001;
+        for (let i = 0; i < 50; i++) {
+          const x = (i * 137.5) % this.canvas.width;
+          const y = (i * 73.3) % (this.canvas.height * 0.6);
+          const twinkle = Math.sin(time * 2 + i) * 0.5 + 0.5;
+          this.ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + twinkle * 0.7})`;
+          this.ctx.fillRect(Math.floor(x), Math.floor(y), 2, 2);
+        }
+      }
+
+      drawWaves() {
+        const time = Date.now() * 0.001;
+        this.ctx.fillStyle = '#1e4d6b';
+        this.ctx.fillRect(0, this.canvas.height * 0.7, this.canvas.width, this.canvas.height * 0.3);
+
+        for (let layer = 0; layer < 3; layer++) {
+          this.ctx.fillStyle = `rgba(42, 106, 138, ${0.5 - layer * 0.15})`;
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, this.canvas.height);
+          for (let x = 0; x <= this.canvas.width; x += 10) {
+            const y = this.canvas.height * (0.65 + layer * 0.05) +
+                      Math.sin(x * 0.02 + time * (0.5 + layer * 0.2)) * 20 +
+                      Math.sin(x * 0.01 + time * 0.3) * 10;
+            this.ctx.lineTo(x, y);
+          }
+          this.ctx.lineTo(this.canvas.width, this.canvas.height);
+          this.ctx.fill();
+        }
+      }
+
+      drawStream() {
+        const time = Date.now() * 0.001;
+        this.ctx.fillStyle = '#00ced1';
+        this.ctx.globalAlpha = 0.3;
+        for (let i = 0; i < 20; i++) {
+          const x = this.canvas.width * 0.3 + Math.sin(time + i) * 50;
+          const y = this.canvas.height * 0.5 + i * 30 + Math.sin(time * 2 + i) * 20;
+          this.ctx.fillRect(Math.floor(x), Math.floor(y), 4, 4);
+        }
+        this.ctx.globalAlpha = 1;
+      }
+
+      drawSteam() {
+        while (this.particles.length < 30) {
+          this.particles.push({
+            type: 'steam',
+            x: Math.random() * this.canvas.width,
+            y: this.canvas.height,
+            speed: 0.5 + Math.random() * 1,
+            size: 8 + Math.random() * 8,
+            life: 100 + Math.random() * 50
+          });
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          if (p.type !== 'steam') continue;
+          p.y -= p.speed;
+          p.x += Math.sin(p.y * 0.02) * 0.3;
+          p.life--;
+
+          this.ctx.fillStyle = `rgba(176, 196, 222, ${p.life / 150})`;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+      }
+
+      startLoop() {
+        const loop = () => {
+          this.update();
+          requestAnimationFrame(loop);
+        };
+        loop();
+      }
+    }
+
+    // ===================== UI CONTROLLER =====================
+    class UIController {
+      constructor() {
+        this.audio = new AudioEngine();
+        this.visual = new VisualEngine(document.getElementById('bgCanvas'));
+        this.soundStates = {};
+        this.masterVolume = 0.7;
+
+        SOUNDS.forEach(s => {
+          this.soundStates[s.id] = { active: false, volume: 0.5 };
+        });
+      }
+
+      async init() {
+        await this.audio.init();
+        this.renderSoundGrid();
+        this.setupEventListeners();
+        this.startClock();
+        this.visual.startLoop();
+        this.hideLoadingScreen();
+      }
+
+      renderSoundGrid() {
+        const grid = document.getElementById('soundGrid');
+        grid.innerHTML = '';
+
+        SOUNDS.forEach(sound => {
+          const card = document.createElement('div');
+          card.className = 'sound-card';
+          card.dataset.sound = sound.id;
+          card.innerHTML = `
+            <div class="glow-effect"></div>
+            <div class="sound-icon">${sound.icon}</div>
+            <div class="sound-name">${sound.name}</div>
+            <div class="volume-slider" data-sound="${sound.id}">
+              <div class="volume-fill" style="width: 50%;"></div>
+              <div class="volume-thumb" style="left: 50%;"></div>
+            </div>
+          `;
+
+          card.addEventListener('click', (e) => {
+            if (!e.target.closest('.volume-slider')) {
+              this.toggleSound(sound.id, sound.type);
+            }
+          });
+
+          const slider = card.querySelector('.volume-slider');
+          this.setupVolumeSlider(slider, sound.id);
+
+          grid.appendChild(card);
+        });
+      }
+
+      setupVolumeSlider(slider, soundId) {
+        let isDragging = false;
+
+        const updateSlider = (e) => {
+          const rect = slider.getBoundingClientRect();
+          const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+          const percent = Math.max(0, Math.min(1, x / rect.width));
+
+          slider.querySelector('.volume-fill').style.width = `${percent * 100}%`;
+          slider.querySelector('.volume-thumb').style.left = `${percent * 100}%`;
+
+          this.soundStates[soundId].volume = percent;
+          if (this.soundStates[soundId].active) {
+            this.audio.setVolume(soundId, percent);
+          }
+        };
+
+        slider.addEventListener('pointerdown', (e) => {
+          isDragging = true;
+          updateSlider(e);
+          e.stopPropagation();
+          e.preventDefault();
+        });
+
+        document.addEventListener('pointermove', (e) => {
+          if (isDragging) updateSlider(e);
+        });
+
+        document.addEventListener('pointerup', () => {
+          isDragging = false;
+        });
+      }
+
+      toggleSound(id, type) {
+        if (id === 'quietNight') {
+          this.audio.playSound(id, type);
+          return;
+        }
+
+        const state = this.soundStates[id];
+        const card = document.querySelector(`[data-sound="${id}"]`);
+
+        if (state.active) {
+          state.active = false;
+          card.classList.remove('active');
+          this.audio.stopSound(id);
+          this.visual.removeEffect(type);
+        } else {
+          state.active = true;
+          card.classList.add('active');
+          this.audio.playSound(id, type);
+          this.audio.setVolume(id, state.volume);
+          this.visual.addEffect(type);
+        }
+      }
+
+      setupEventListeners() {
+        // Master volume
+        const masterSlider = document.getElementById('masterSlider');
+        let isDraggingMaster = false;
+
+        const updateMaster = (e) => {
+          const rect = masterSlider.getBoundingClientRect();
+          const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+          const percent = Math.max(0, Math.min(1, x / rect.width));
+
+          this.masterVolume = percent;
+          this.audio.setMasterVolume(percent);
+          document.getElementById('masterFill').style.width = `${percent * 100}%`;
+          document.getElementById('masterThumb').style.left = `${percent * 100}%`;
+        };
+
+        masterSlider.addEventListener('pointerdown', (e) => {
+          isDraggingMaster = true;
+          updateMaster(e);
+          e.preventDefault();
+        });
+
+        document.addEventListener('pointermove', (e) => {
+          if (isDraggingMaster) updateMaster(e);
+        });
+
+        document.addEventListener('pointerup', () => {
+          isDraggingMaster = false;
+        });
+
+        // Control buttons
+        document.getElementById('pauseAllBtn').addEventListener('click', () => this.pauseAll());
+        document.getElementById('pauseAllBtn2').addEventListener('click', () => this.pauseAll());
+        document.getElementById('randomBtn').addEventListener('click', () => this.randomMix());
+        document.getElementById('randomBtn2').addEventListener('click', () => this.randomMix());
+
+        // Touch to unlock audio
+        document.addEventListener('touchstart', () => this.audio.init(), { once: true });
+        document.addEventListener('click', () => this.audio.init(), { once: true });
+      }
+
+      pauseAll() {
+        SOUNDS.forEach(s => {
+          if (this.soundStates[s.id].active) {
+            this.toggleSound(s.id, s.type);
+          }
+        });
+      }
+
+      randomMix() {
+        this.pauseAll();
+        const count = 2 + Math.floor(Math.random() * 3);
+        const shuffled = [...SOUNDS].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < count && i < shuffled.length; i++) {
+          setTimeout(() => {
+            this.toggleSound(shuffled[i].id, shuffled[i].type);
+          }, i * 200);
+        }
+      }
+
+      startClock() {
+        const updateClock = () => {
+          const now = new Date();
+          const hours = String(now.getHours()).padStart(2, '0');
+          const minutes = String(now.getMinutes()).padStart(2, '0');
+          document.getElementById('mcClock').textContent = `${hours}:${minutes}`;
+        };
+        updateClock();
+        setInterval(updateClock, 1000);
+      }
+
+      hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loadingScreen');
+        const app = document.getElementById('app');
+        
+        loadingScreen.classList.add('hidden');
+        app.classList.add('loaded');
+      }
+
+      updateLoadingProgress(percent, text) {
+        document.getElementById('loadingBar').style.width = `${percent}%`;
+        document.getElementById('loadingText').textContent = text;
+      }
+    }
+
+    // ===================== BOOT =====================
+    const app = new UIController();
+
+    async function boot() {
+      const loadingSteps = [
+        [10, '初始化音频引擎'],
+        [30, '生成噪声缓冲区'],
+        [50, '配置滤波器'],
+        [70, '创建粒子系统'],
+        [90, '渲染UI组件'],
+        [100, '启动完成!']
+      ];
+
+      for (const [percent, text] of loadingSteps) {
+        app.updateLoadingProgress(percent, text);
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      await app.init();
+    }
+
+    document.addEventListener('DOMContentLoaded', boot);
+  </script>
+</body>
+</html>

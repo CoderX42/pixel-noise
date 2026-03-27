@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <title>PixelNoise v4</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ===== DESIGN TOKENS ===== */
+      :root {
+        --oak: #8b7355;
+        --oak-hi: #a08868;
+        --oak-sh: #5c4d38;
+        --diamond: #6b8e9f;
+        --diamond-hi: #85aabd;
+        --diamond-sh: #4a6b7a;
+        --lava: #e8833a;
+        --lava-hi: #f09a52;
+        --lava-sh: #c06828;
+        --coal: #2d2d2d;
+        --white: #f0f0f0;
+
+        --bg-rain: #4a6a80;
+        --bg-forest: #4a6a4a;
+        --bg-waves: #2a5a70;
+        --bg-fire: #6a3a1a;
+        --bg-snow: #7a8a9a;
+        --bg-noise: #555566;
+
+        --hi: rgba(255, 255, 255, 0.28);
+        --sh: rgba(0, 0, 0, 0.28);
+        --panel: rgba(0, 0, 0, 0.18);
+        --panel-dark: rgba(0, 0, 0, 0.52);
+
+        --bg-color: var(--bg-rain);
+        --text: #ffffff;
+      }
+      [data-theme="night"] {
+        --text: #e8e8d0;
+      }
+
+      /* ===== GLOBAL & RESET ===== */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        image-rendering: pixelated;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "VT323", monospace;
+        font-size: 20px;
+        color: var(--text);
+        background: var(--bg-color);
+        transition: background 0.6s steps(10);
+      }
+
+      /* ===== PIXEL BUTTON MIXIN ===== */
+      .pb {
+        background: var(--oak);
+        border: 2px solid var(--coal);
+        box-shadow:
+          inset 0 1px 0 var(--hi),
+          inset 0 -2px 0 var(--sh),
+          2px 2px 0 rgba(0, 0, 0, 0.3);
+        color: var(--white);
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        transition:
+          transform 60ms steps(1),
+          box-shadow 60ms steps(1);
+      }
+      .pb:active,
+      .pb.dn {
+        transform: translate(2px, 2px);
+        box-shadow:
+          inset 0 2px 0 var(--sh),
+          inset 0 -1px 0 var(--hi),
+          0 0 0 transparent;
+      }
+      .pb.sel {
+        background: var(--diamond);
+        box-shadow:
+          inset 0 2px 0 var(--sh),
+          inset 0 -1px 0 var(--hi),
+          2px 2px 0 rgba(0, 0, 0, 0.3);
+      }
+      .pb.acc {
+        background: var(--lava);
+      }
+      .pb.acc:active,
+      .pb.acc.dn {
+        background: var(--lava-sh);
+      }
+
+      /* ===== APP SHELL ===== */
+      .app {
+        width: 100%;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* ===== TOP BAR ===== */
+      .tbar {
+        height: max(48px, env(safe-area-inset-top));
+        padding: env(safe-area-inset-top) 16px 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        z-index: 30;
+        gap: 8px;
+        background: transparent;
+      }
+      .logo {
+        font-family: "Press Start 2P", monospace;
+        font-size: max(12px, 3vmin);
+        color: var(--text);
+        letter-spacing: 1px;
+        flex: 1;
+        text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+      }
+      .tbar .pb {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+      }
+
+      /* ===== SCENE LAYER ===== */
+      .scene {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #scene-canvas {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .play-fab {
+        width: 72px;
+        height: 72px;
+        font-size: 32px;
+        z-index: 20;
+        border-radius: 0;
+        box-shadow: 2px 4px 0 rgba(0, 0, 0, 0.4);
+      }
+      .play-fab:active,
+      .play-fab.dn {
+        box-shadow: 0 0 0 transparent;
+      }
+
+      /* ===== SOUND BAR ===== */
+      .sstrip {
+        flex-shrink: 0;
+        height: auto;
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 12px 16px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        background: var(--panel);
+        border-top: 2px solid var(--coal);
+        z-index: 20;
+      }
+      .sstrip::-webkit-scrollbar {
+        display: none;
+      }
+
+      .scell {
+        flex-shrink: 0;
+        width: 84px;
+        height: 96px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        position: relative;
+        font-size: 14px;
+      }
+      .scell .ico {
+        width: 32px;
+        height: 32px;
+      }
+      .scell .lbl {
+        width: 100%;
+        text-align: center;
+        padding: 2px 0;
+        background: rgba(0, 0, 0, 0.4);
+        color: #fff;
+        font-size: 16px;
+        line-height: 1.1;
+      }
+      .scell .badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 14px;
+        height: 14px;
+        background: var(--lava);
+        border: 2px solid var(--coal);
+        box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+        font-size: 10px;
+        line-height: 10px;
+        color: #fff;
+        text-align: center;
+        display: none;
+        font-family: "Press Start 2P";
+      }
+      .scell.sel .badge {
+        display: block;
+      }
+      .scell.mix-on .badge {
+        background: var(--diamond);
+        display: block;
+      }
+
+      /* ===== BOTTOM CONTROLS ===== */
+      .cbar {
+        flex-shrink: 0;
+        height: auto;
+        min-height: 80px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(8px, 2vw, 24px);
+        background: var(--panel-dark);
+        border-top: 2px solid var(--coal);
+        z-index: 20;
+        flex-wrap: wrap;
+        margin-bottom: env(safe-area-inset-bottom);
+      }
+      .cbar .pb.big {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+      }
+      .cbar .pb.sm {
+        width: 48px;
+        height: 48px;
+        font-size: 12px;
+        font-family: "Press Start 2P";
+      }
+
+      /* 像素滑块自适应 */
+      .sbox {
+        flex: 1;
+        min-width: 150px;
+        max-width: 320px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .strk {
+        position: relative;
+        flex: 1;
+        height: 12px;
+        background: var(--oak);
+        border: 2px solid var(--coal);
+        cursor: pointer;
+      }
+      .sfill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: var(--diamond);
+        transition: width 0.1s steps(4);
+      }
+      .sthumb {
+        position: absolute;
+        top: 50%;
+        width: 16px;
+        height: 28px;
+        background: var(--diamond);
+        border: 2px solid var(--coal);
+        transform: translate(-50%, -50%);
+        cursor: ew-resize;
+        box-shadow:
+          inset 1px 0 0 rgba(255, 255, 255, 0.5),
+          inset 0 1px 0 rgba(255, 255, 255, 0.5);
+      }
+      .sthumb::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+        background: rgba(255, 255, 255, 0.6);
+        transform: translateX(-50%);
+      }
+      .sthumb.drag {
+        background: var(--lava);
+        width: 22px;
+      }
+      .vlbl {
+        font-size: 24px;
+        min-width: 44px;
+        text-align: right;
+        text-shadow: 1px 1px 0 #000;
+      }
+      .timer-lbl {
+        font-size: 16px;
+        line-height: 1.1;
+        text-align: center;
+      }
+
+      /* ===== MIX BAR ===== */
+      .mix-bar {
+        position: absolute;
+        top: max(60px, calc(env(safe-area-inset-top) + 60px));
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--panel-dark);
+        border: 2px solid var(--coal);
+        padding: 6px 16px;
+        font-size: 18px;
+        color: #fff;
+        white-space: nowrap;
+        z-index: 25;
+        display: none;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+      }
+      .mix-bar.on {
+        display: flex;
+      }
+
+      /* ===== PIXEL DISSOLVE ===== */
+      .dis-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 15;
+        pointer-events: none;
+      }
+
+      /* ===== MENUS ===== */
+      .mpanel {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: none;
+        background: rgba(0, 0, 0, 0.8);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        backdrop-filter: blur(4px);
+      }
+      .mpanel.on {
+        display: flex;
+      }
+      .mpanel .pb {
+        width: 260px;
+        height: 56px;
+        font-size: 22px;
+      }
+
+      /* ===== RESPONSIVE LANDSCAPE (TABLET/DESKTOP/MOBILE LS) ===== */
+      @media (orientation: landscape) and (min-width: 500px) {
+        .app {
+          flex-direction: row;
+        }
+        .scene {
+          order: 2;
+          height: 100dvh;
+        }
+        .mix-bar {
+          top: 16px;
+          left: auto;
+          right: 16px;
+          transform: none;
+        }
+
+        /* 将声音网格移入侧边栏 */
+        .sstrip {
+          order: 1;
+          flex-direction: column;
+          width: 110px;
+          height: 100dvh;
+          padding: max(16px, env(safe-area-inset-top)) 12px;
+          border-top: none;
+          border-right: 2px solid var(--coal);
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+        .scell {
+          width: 86px;
+          height: 86px;
+        }
+
+        /* 将控制栏放在底部绝对定位浮框，或右下方 */
+        .cbar {
+          position: absolute;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: auto;
+          height: 72px;
+          border: 2px solid var(--coal);
+          border-radius: 4px;
+          box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+          z-index: 30;
+        }
+        .tbar {
+          position: absolute;
+          top: 0;
+          left: 110px;
+          right: 0;
+          width: auto;
+          pointer-events: none;
+        }
+        .tbar > * {
+          pointer-events: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div class="tbar">
+        <div class="logo">PixelNoise</div>
+        <button
+          class="pb"
+          id="mixBtn"
+          title="混音模式"
+          style="
+            font-family: &quot;VT323&quot;;
+            font-size: 22px;
+            padding: 0 8px;
+            width: auto;
+          "
+        >
+          MIX
+        </button>
+        <button
+          class="pb"
+          id="themeBtn"
+          style="font-family: &quot;VT323&quot;; font-size: 24px"
+        >
+          🌙
+        </button>
+      </div>
+
+      <div class="scene" id="scene">
+        <canvas id="scene-canvas"></canvas>
+        <canvas id="dcanvas" class="dis-canvas"></canvas>
+        <button class="pb acc play-fab" id="playFab">▶</button>
+        <div class="mix-bar" id="mixBar">🎛 混音模式开启 (叠加播放)</div>
+      </div>
+
+      <div class="sstrip" id="sstrip"></div>
+
+      <div class="cbar" id="cbar">
+        <button class="pb acc big" id="ctrlPlay">▶</button>
+        <div class="sbox">
+          <span style="font-size: 20px; text-shadow: 1px 1px 0 #000">🔈</span>
+          <div class="strk" id="strk">
+            <div class="sfill" id="sfill"></div>
+            <div class="sthumb" id="sthumb"></div>
+          </div>
+          <span class="vlbl" id="vlbl">50</span>
+        </div>
+        <button class="pb sm" id="timerBtn">
+          <div class="timer-lbl">⏰<br />off</div>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // ===================== DATA =====================
+      const SOUNDS = [
+        { id: "rain", name: "雨声", col: "#4A6A80" },
+        { id: "forest", name: "森林", col: "#4A6A4A" },
+        { id: "waves", name: "海浪", col: "#2A5A70" },
+        { id: "fire", name: "篝火", col: "#6A3A1A" },
+        { id: "snow", name: "雪花", col: "#7A8A9A" },
+        { id: "noise", name: "纯噪", col: "#555566" },
+      ];
+      const TIMERS = [0, 15, 30, 60, 120];
+
+      // ===================== SVG ICONS =====================
+      const ICONS = {
+        rain: `<svg viewBox="0 0 16 16"><rect fill="#5B7FAA" x="3" y="1" width="10" height="6"/><rect fill="#87AECE" x="1" y="3" width="14" height="2"/><rect fill="#5B7FAA" x="3" y="9" width="3" height="4"/><rect fill="#5B7FAA" x="7" y="11" width="2" height="4"/><rect fill="#5B7FAA" x="10" y="9" width="3" height="4"/></svg>`,
+        forest: `<svg viewBox="0 0 16 16"><rect fill="#2E7D32" x="5" y="1" width="6" height="2"/><rect fill="#388E3C" x="3" y="3" width="10" height="2"/><rect fill="#43A047" x="1" y="5" width="14" height="3"/><rect fill="#2E7D32" x="3" y="8" width="10" height="2"/><rect fill="#5D4037" x="6" y="10" width="4" height="5"/></svg>`,
+        waves: `<svg viewBox="0 0 16 16"><rect fill="#29B6F6" x="2" y="5" width="3" height="2"/><rect fill="#0288D1" x="5" y="7" width="3" height="2"/><rect fill="#29B6F6" x="8" y="5" width="4" height="2"/><rect fill="#29B6F6" x="0" y="9" width="4" height="2"/><rect fill="#0288D1" x="4" y="11" width="7" height="2"/><rect fill="#0288D1" x="11" y="9" width="3" height="2"/><rect fill="#01579B" x="0" y="13" width="16" height="3"/></svg>`,
+        fire: `<svg viewBox="0 0 16 16"><rect fill="#FF8F00" x="4" y="8" width="8" height="5"/><rect fill="#FFB300" x="6" y="5" width="4" height="5"/><rect fill="#FFD54F" x="7" y="2" width="2" height="5"/><rect fill="#FF6F00" x="3" y="11" width="10" height="4"/><rect fill="#FF8F00" x="5" y="3" width="2" height="3"/><rect fill="#FF8F00" x="9" y="4" width="2" height="3"/></svg>`,
+        snow: `<svg viewBox="0 0 16 16"><rect fill="#B3E5FC" x="7" y="1" width="2" height="14"/><rect fill="#B3E5FC" x="1" y="7" width="14" height="2"/><rect fill="#B3E5FC" x="3" y="3" width="2" height="2"/><rect fill="#B3E5FC" x="11" y="3" width="2" height="2"/><rect fill="#B3E5FC" x="3" y="11" width="2" height="2"/><rect fill="#B3E5FC" x="11" y="11" width="2" height="2"/><rect fill="#E1F5FE" x="6" y="6" width="4" height="4"/></svg>`,
+        noise: `<svg viewBox="0 0 16 16"><rect fill="#888" x="0" y="0" width="4" height="4"/><rect fill="#444" x="4" y="0" width="4" height="4"/><rect fill="#AAA" x="8" y="0" width="4" height="4"/><rect fill="#666" x="12" y="0" width="4" height="4"/><rect fill="#AAA" x="0" y="4" width="4" height="4"/><rect fill="#888" x="4" y="4" width="4" height="4"/><rect fill="#444" x="8" y="4" width="4" height="4"/><rect fill="#AAA" x="12" y="4" width="4" height="4"/><rect fill="#666" x="0" y="8" width="4" height="4"/><rect fill="#AAA" x="4" y="8" width="4" height="4"/><rect fill="#888" x="8" y="8" width="4" height="4"/><rect fill="#444" x="12" y="8" width="4" height="4"/><rect fill="#888" x="0" y="12" width="4" height="4"/><rect fill="#666" x="4" y="12" width="4" height="4"/><rect fill="#AAA" x="8" y="12" width="4" height="4"/><rect fill="#888" x="12" y="12" width="4" height="4"/></svg>`,
+      };
+
+      // ===================== STATE =====================
+      const DB = {
+        get() {
+          try {
+            return JSON.parse(localStorage.getItem("pxn4")) || {};
+          } catch (e) {
+            return {};
+          }
+        },
+        set(d) {
+          localStorage.setItem("pxn4", JSON.stringify(d));
+        },
+      };
+      const sv = DB.get();
+      const S = {
+        sound: sv.sound || "rain",
+        mixSounds: sv.mixSounds || [],
+        volume: sv.volume ?? 50,
+        theme: sv.theme || "day",
+        mixMode: Boolean(sv.mixMode),
+        playing: false,
+        timerIdx: 0,
+        timerLeft: 0,
+      };
+      const $ = (id) => document.getElementById(id);
+      const el = {
+        strip: $("sstrip"),
+        playFab: $("playFab"),
+        ctrlPlay: $("ctrlPlay"),
+        themeBtn: $("themeBtn"),
+        mixBtn: $("mixBtn"),
+        sfill: $("sfill"),
+        sthumb: $("sthumb"),
+        strk: $("strk"),
+        vlbl: $("vlbl"),
+        timerBtn: $("timerBtn"),
+        cvs: $("scene-canvas"),
+        dcvs: $("dcanvas"),
+        mixBar: $("mixBar"),
+      };
+
+      // ===================== AUDIO ENGINE =====================
+      let actx,
+        mGain,
+        nodes = [];
+      function initActx() {
+        if (actx) return;
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        mGain = actx.createGain();
+        mGain.connect(actx.destination);
+        applyVol();
+      }
+      function applyVol() {
+        if (mGain) {
+          mGain.gain.cancelScheduledValues(actx.currentTime);
+          mGain.gain.setValueAtTime(
+            Math.pow(S.volume / 100, 2),
+            actx.currentTime,
+          );
+        }
+      }
+      function stopAud() {
+        nodes.forEach((n) => {
+          try {
+            n.stop?.();
+            n.disconnect?.();
+          } catch (e) {}
+        });
+        nodes = [];
+      }
+      function mkBuf(t) {
+        const l = actx.sampleRate * 2,
+          b = actx.createBuffer(1, l, actx.sampleRate),
+          d = b.getChannelData(0);
+        let p = 0;
+        for (let i = 0; i < l; i++) {
+          const w = Math.random() * 2 - 1;
+          if (t === "br") {
+            d[i] = (p + 0.02 * w) / 1.02;
+            p = d[i];
+            d[i] *= 3.5;
+          } else if (t === "pk") {
+            d[i] = w * 0.15;
+          } else {
+            d[i] = w * 0.5;
+          }
+        }
+        return b;
+      }
+      function _src(t) {
+        const s = actx.createBufferSource();
+        s.buffer = mkBuf(t);
+        s.loop = true;
+        return s;
+      }
+      function _flt(t, f) {
+        const l = actx.createBiquadFilter();
+        l.type = t;
+        l.frequency.value = f;
+        return l;
+      }
+
+      const audSys = {
+        rain() {
+          const s = _src("pk"),
+            f = _flt("lowpass", 1000);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+        },
+        noise() {
+          const s = _src("wh"),
+            f = _flt("lowpass", 3000);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+        },
+        fire() {
+          const s = _src("br"),
+            f = _flt("lowpass", 400);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+        },
+        waves() {
+          const s = _src("pk"),
+            f = _flt("lowpass", 600),
+            l = actx.createOscillator(),
+            lg = actx.createGain(),
+            a = actx.createOscillator(),
+            ag = actx.createGain();
+          l.frequency.value = 0.08;
+          lg.gain.value = 400;
+          l.connect(lg);
+          lg.connect(f.frequency);
+          a.frequency.value = 0.08;
+          ag.gain.value = 0.4;
+          a.connect(ag);
+          s.connect(f);
+          f.connect(ag);
+          ag.connect(mGain);
+          s.start();
+          l.start();
+          a.start();
+          nodes.push(s, f, l, lg, a, ag);
+        },
+        snow() {
+          const s = _src("pk"),
+            f = _flt("lowpass", 500),
+            g = actx.createGain();
+          g.gain.value = 0.6;
+          s.connect(f);
+          f.connect(g);
+          g.connect(mGain);
+          s.start();
+          nodes.push(s, f, g);
+        },
+        forest() {
+          const s = _src("pk"),
+            f = _flt("lowpass", 700);
+          s.connect(f);
+          f.connect(mGain);
+          s.start();
+          nodes.push(s, f);
+          const o = actx.createOscillator(),
+            g = actx.createGain();
+          g.gain.value = 0;
+          o.connect(g);
+          g.connect(mGain);
+          o.start();
+          nodes.push(o, g);
+          const iv = setInterval(() => {
+            if (!S.playing) return;
+            if (Math.random() > 0.6 && actx.state === "running") {
+              o.frequency.setValueAtTime(
+                2000 + Math.random() * 1500,
+                actx.currentTime,
+              );
+              g.gain.setValueAtTime(0.06, actx.currentTime);
+              g.gain.exponentialRampToValueAtTime(
+                0.001,
+                actx.currentTime + 0.1,
+              );
+            }
+          }, 1000);
+          nodes.push({ stop: () => clearInterval(iv) });
+        },
+      };
+      function playAud() {
+        initActx();
+        if (actx.state === "suspended") actx.resume();
+        stopAud();
+        const arr = S.mixMode && S.mixSounds.length ? S.mixSounds : [S.sound];
+        arr.forEach((id) => {
+          if (audSys[id]) audSys[id]();
+        });
+      }
+
+      // ===================== DYNAMIC CANVAS ENGINE =====================
+      /* The engine natively runs on logical "pixel" coordinates, responsive to screen size */
+      const ctx = el.cvs.getContext("2d", { alpha: true });
+      let CW = 0,
+        CH = 0;
+      const PX = 4; // 1 pixel in game = 4px on screen
+      const resOb = new ResizeObserver((entries) => {
+        for (let e of entries) {
+          const w = e.contentRect.width,
+            h = e.contentRect.height;
+          if (w === 0) continue;
+          CW = Math.floor(w / PX);
+          CH = Math.floor(h / PX);
+          el.cvs.width = CW;
+          el.cvs.height = CH;
+          el.dcvs.width = CW;
+          el.dcvs.height = CH;
+        }
+      });
+      resOb.observe(document.getElementById("scene"));
+
+      // Particle systems per sound
+      const sysNodes = {
+        rain: [],
+        forest: [],
+        waves: [],
+        fire: [],
+        snow: [],
+        noise: [],
+        ripples: [],
+      };
+
+      // Colors mapping
+      const PALS = {
+        rain: ["#5B7FAA", "#87AECE", "#4A6A80"],
+        forest: ["#2E7D32", "#43A047", "#90C870"],
+        waves: ["#29B6F6", "#0288D1", "#01579B"],
+        fire: ["#FF8F00", "#FFB300", "#FFD54F"],
+        snow: ["#B3E5FC", "#E1F5FE", "#FFFFFF"],
+        noise: ["#888888", "#AAAAAA", "#444444"],
+      };
+
+      function drawParticles(t) {
+        // 1. Fill base Theme background
+        const bgC = getComputedStyle(document.body)
+          .getPropertyValue("--bg-color")
+          .trim();
+        ctx.clearRect(0, 0, CW, CH);
+
+        const arr = S.mixMode && S.mixSounds.length ? S.mixSounds : [S.sound];
+
+        // Update & Draw Each System Independently
+
+        // -- RAIN --
+        if (arr.includes("rain")) {
+          const pt = sysNodes.rain;
+          while (pt.length < CW * 0.8)
+            pt.push({
+              x: Math.random() * CW,
+              y: Math.random() * -CH,
+              s: 1 + Math.random(),
+              v: 5 + Math.random() * 3,
+            });
+          ctx.fillStyle = PALS.rain[1];
+          for (let i = pt.length - 1; i >= 0; i--) {
+            let p = pt[i];
+            p.y += p.v;
+            p.x += p.v * 0.2;
+            ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, p.s * 3);
+            if (p.y > CH) {
+              // Ground splash
+              ctx.fillRect(Math.floor(p.x) - 1, CH - 1, 3, 1);
+              pt.splice(i, 1);
+            }
+          }
+        }
+
+        // -- SNOW --
+        if (arr.includes("snow")) {
+          const pt = sysNodes.snow;
+          while (pt.length < CW * 0.5)
+            pt.push({
+              x: Math.random() * CW,
+              y: Math.random() * -CH,
+              s: 1,
+              v: 0.5 + Math.random() * 1,
+              offset: Math.random() * 100,
+            });
+          ctx.fillStyle = "#FFFFFF";
+          for (let i = pt.length - 1; i >= 0; i--) {
+            let p = pt[i];
+            p.y += p.v;
+            p.x += Math.sin(p.y * 0.05 + p.offset) * 0.5;
+            ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 1);
+            if (p.y > CH) pt.splice(i, 1);
+          }
+        }
+
+        // -- FOREST (Leaves falling, occasional bird) --
+        if (arr.includes("forest")) {
+          const pt = sysNodes.forest;
+          while (pt.length < CW * 0.1)
+            pt.push({
+              x: Math.random() * CW,
+              y: Math.random() * -CH,
+              type: Math.random() > 0.9 ? "bird" : "leaf",
+              phase: Math.random() * 10,
+            });
+          for (let i = pt.length - 1; i >= 0; i--) {
+            let p = pt[i];
+            if (p.type === "leaf") {
+              p.y += 0.8;
+              p.x += Math.sin(p.y * 0.03 + p.phase) * 1.5;
+              ctx.fillStyle = PALS.forest[1];
+              ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 1);
+              if (p.y > CH) pt.splice(i, 1);
+            } else {
+              // bird
+              p.x += 1.5;
+              p.y += Math.sin(p.x * 0.05) * 0.5;
+              ctx.fillStyle = "#111";
+              ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 2, 1); // body
+              ctx.fillRect(
+                Math.floor(p.x) + (Math.sin(t * 0.02) > 0 ? 1 : -1),
+                Math.floor(p.y) - 1,
+                1,
+                1,
+              ); // wing
+              if (p.x > CW) pt.splice(i, 1);
+            }
+          }
+        }
+
+        // -- FIRE (Rise from bottom) --
+        if (arr.includes("fire")) {
+          const pt = sysNodes.fire;
+          while (pt.length < CW * 0.8)
+            pt.push({
+              x: CW * 0.3 + Math.random() * (CW * 0.4),
+              y: CH,
+              s: Math.random() > 0.5 ? 2 : 1,
+              life: Math.random() * 60,
+            });
+          for (let i = pt.length - 1; i >= 0; i--) {
+            let p = pt[i];
+            p.y -= 0.5 + Math.random();
+            p.x += Math.sin(p.y * 0.1) * 1;
+            p.life--;
+            ctx.fillStyle =
+              p.life > 40
+                ? PALS.fire[2]
+                : p.life > 20
+                  ? PALS.fire[1]
+                  : PALS.fire[0];
+            ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.s, p.s);
+            if (p.life < 0 || p.y < 0) pt.splice(i, 1);
+          }
+        }
+
+        // -- WAVES (Stylized wave at bottom) --
+        if (arr.includes("waves")) {
+          const pt = sysNodes.waves;
+          // Just algorithmic drawings, no particle array needed for sine waves
+          ctx.fillStyle = PALS.waves[2]; // deep blue base
+          ctx.fillRect(0, CH - 15, CW, 15);
+          for (let x = 0; x < CW; x++) {
+            let y1 =
+              CH -
+              15 +
+              Math.sin(x * 0.05 + t * 0.002) * 4 +
+              Math.sin(x * 0.1) * 2;
+            let y2 = CH - 10 + Math.sin(x * 0.04 - t * 0.0015) * 6;
+            ctx.fillStyle = PALS.waves[1];
+            ctx.fillRect(x, Math.floor(y1), 1, CH - y1);
+            ctx.fillStyle = PALS.waves[0];
+            ctx.fillRect(x, Math.floor(y2), 1, CH - y2);
+          }
+        }
+
+        // -- NOISE (Static Overlay) --
+        if (arr.includes("noise")) {
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          for (let i = 0; i < CW * CH * 0.05; i++) {
+            ctx.fillRect(
+              Math.floor(Math.random() * CW),
+              Math.floor(Math.random() * CH),
+              1,
+              1,
+            );
+          }
+          ctx.fillStyle = "rgba(0,0,0,0.06)";
+          for (let i = 0; i < CW * CH * 0.05; i++) {
+            ctx.fillRect(
+              Math.floor(Math.random() * CW),
+              Math.floor(Math.random() * CH),
+              1,
+              1,
+            );
+          }
+        }
+
+        // -- RIPPLES --
+        const rp = sysNodes.ripples;
+        ctx.strokeStyle =
+          S.theme === "night" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)";
+        ctx.lineWidth = 1;
+        for (let i = rp.length - 1; i >= 0; i--) {
+          let r = rp[i];
+          r.r += 0.8;
+          if (r.r > r.m) {
+            rp.splice(i, 1);
+            continue;
+          }
+          ctx.strokeRect(
+            Math.floor(r.x - r.r),
+            Math.floor(r.y - r.r),
+            Math.floor(r.r * 2),
+            Math.floor(r.r * 2),
+          );
+        }
+      }
+
+      el.cvs.parentElement.addEventListener("pointerdown", (e) => {
+        const rc = el.cvs.getBoundingClientRect();
+        sysNodes.ripples.push({
+          x: (e.clientX - rc.left) / PX,
+          y: (e.clientY - rc.top) / PX,
+          r: 1,
+          m: 10 + Math.random() * 15,
+        });
+        if (actx && actx.state === "suspended" && S.playing) actx.resume();
+      });
+
+      let _lt = 0;
+      function loop(t) {
+        requestAnimationFrame(loop);
+        if (t - _lt < 33.3) return; // ~30fps lock for retro feel
+        _lt = t;
+        drawParticles(t);
+      }
+      requestAnimationFrame(loop);
+
+      // ===================== DISSOLVE TRANSITION =====================
+      function doDissolve(cb) {
+        const dtx = el.dcvs.getContext("2d");
+        if (!CW || !CH) {
+          if (cb) cb();
+          return;
+        }
+        const cells = [];
+        for (let y = 0; y < CH; y += 2)
+          for (let x = 0; x < CW; x += 2)
+            cells.push({ x, y, t: Math.random() });
+        cells.sort((a, b) => a.t - b.t);
+
+        let f = 0,
+          B = Math.ceil(cells.length / 10);
+        const color = S.theme === "night" ? "#1A1A1A" : "#C6C6C6";
+
+        const paint = () => {
+          dtx.fillStyle = color;
+          for (let k = 0; k < B && f < cells.length; k++, f++) {
+            dtx.fillRect(cells[f].x, cells[f].y, 2, 2);
+          }
+          if (f < cells.length) {
+            requestAnimationFrame(paint);
+          } else {
+            if (cb) cb(); // Switch state safely under the mask
+            setTimeout(erase, 50);
+          }
+        };
+
+        let ef = cells.length - 1;
+        const erase = () => {
+          const toKeep = cells.slice(0, ef);
+          dtx.clearRect(0, 0, CW, CH);
+          dtx.fillStyle = color;
+          toKeep.forEach((c) => dtx.fillRect(c.x, c.y, 2, 2));
+          ef -= B;
+          if (ef > 0) {
+            requestAnimationFrame(erase);
+          } else {
+            dtx.clearRect(0, 0, CW, CH);
+          }
+        };
+        paint();
+      }
+
+      // ===================== UI LOGIC =====================
+      function buildCells() {
+        el.strip.innerHTML = "";
+        SOUNDS.forEach((s) => {
+          const b = document.createElement("button");
+          const isSel = S.mixMode
+            ? S.mixSounds.includes(s.id)
+            : S.sound === s.id;
+          b.className =
+            "pb scell" +
+            (isSel ? " sel" : "") +
+            (isSel && S.mixMode ? " mix-on" : "");
+          b.innerHTML = `<div class="ico">${ICONS[s.id]}</div><div class="lbl">${s.name}</div><div class="badge">✓</div>`;
+          b.addEventListener("click", () => handleSelect(s.id));
+          el.strip.appendChild(b);
+        });
+      }
+
+      function handleSelect(id) {
+        if (S.mixMode) {
+          const idx = S.mixSounds.indexOf(id);
+          if (idx >= 0) S.mixSounds.splice(idx, 1);
+          else if (S.mixSounds.length < 4) S.mixSounds.push(id);
+          if (S.mixSounds.length === 0) S.mixSounds.push(S.sound); // fallback
+          save();
+          buildCells();
+          syncColors();
+          if (S.playing) playAud();
+        } else {
+          if (S.sound === id) return;
+          doDissolve(() => {
+            S.sound = id;
+            save();
+            buildCells();
+            syncColors();
+            if (S.playing) playAud();
+          });
+        }
+      }
+
+      function togglePlay(f) {
+        S.playing = typeof f === "boolean" ? f : !S.playing;
+        el.playFab.textContent = S.playing ? "⏸" : "▶";
+        el.ctrlPlay.textContent = S.playing ? "⏸" : "▶";
+        el.playFab.classList.toggle("dn", S.playing);
+        if (S.playing) playAud();
+        else stopAud();
+        save();
+      }
+
+      function syncColors() {
+        const topId =
+          S.mixMode && S.mixSounds.length ? S.mixSounds[0] : S.sound;
+        document.documentElement.style.setProperty(
+          "--bg-color",
+          `var(--bg-${topId})`,
+        );
+      }
+
+      // ===================== INPUTS =====================
+      el.mixBtn.addEventListener("click", () => {
+        S.mixMode = !S.mixMode;
+        if (!S.mixMode) {
+          S.sound = S.mixSounds[0] || S.sound;
+          S.mixSounds = [];
+        } else {
+          S.mixSounds = [S.sound];
+        }
+        el.mixBar.classList.toggle("on", S.mixMode);
+        el.mixBtn.classList.toggle("sel", S.mixMode);
+        save();
+        buildCells();
+        syncColors();
+        if (S.playing) playAud();
+      });
+
+      el.themeBtn.addEventListener("click", () => {
+        S.theme = S.theme === "day" ? "night" : "day";
+        document.body.setAttribute("data-theme", S.theme);
+        el.themeBtn.textContent = S.theme === "day" ? "🌙" : "☀";
+        save();
+      });
+
+      el.playFab.addEventListener("click", () => togglePlay());
+      el.ctrlPlay.addEventListener("click", () => togglePlay());
+
+      // SLIDER
+      let drag = false;
+      function posSlider(px) {
+        const rc = el.strk.getBoundingClientRect();
+        const p = Math.max(0, Math.min(1, (px - rc.left) / rc.width));
+        S.volume = Math.round(p * 20) * 5;
+        el.sfill.style.width = S.volume + "%";
+        el.sthumb.style.left = S.volume + "%";
+        el.vlbl.textContent = S.volume;
+        applyVol();
+        save();
+      }
+      el.strk.addEventListener("pointerdown", (e) => {
+        drag = true;
+        el.sthumb.classList.add("drag");
+        posSlider(e.clientX);
+        e.preventDefault();
+      });
+      el.sthumb.addEventListener("pointerdown", (e) => {
+        drag = true;
+        el.sthumb.classList.add("drag");
+        e.preventDefault();
+      });
+      document.addEventListener("pointermove", (e) => {
+        if (drag) posSlider(e.clientX);
+      });
+      document.addEventListener("pointerup", () => {
+        drag = false;
+        el.sthumb.classList.remove("drag");
+      });
+
+      // TIMER
+      let tiv = null;
+      el.timerBtn.addEventListener("click", () => {
+        S.timerIdx = (S.timerIdx + 1) % TIMERS.length;
+        const m = TIMERS[S.timerIdx];
+        if (tiv) clearInterval(tiv);
+        if (m > 0) {
+          S.timerLeft = m * 60;
+          tiv = setInterval(() => {
+            S.timerLeft--;
+            el.timerBtn.innerHTML = `<div class="timer-lbl">⏰<br>${m}m</div>`;
+            if (S.timerLeft <= 0) {
+              clearInterval(tiv);
+              tiv = null;
+              togglePlay(false);
+              el.timerBtn.innerHTML = `<div class="timer-lbl">⏰<br>off</div>`;
+            }
+          }, 1000);
+        }
+        el.timerBtn.innerHTML = `<div class="timer-lbl">⏰<br>${m > 0 ? m + "m" : "off"}</div>`;
+      });
+
+      // ===================== BOOT =====================
+      function save() {
+        DB.set({
+          sound: S.sound,
+          mixSounds: S.mixSounds,
+          volume: S.volume,
+          theme: S.theme,
+          mixMode: S.mixMode,
+        });
+      }
+      (function boot() {
+        document.body.setAttribute("data-theme", S.theme);
+        el.themeBtn.textContent = S.theme === "day" ? "🌙" : "☀";
+        el.mixBar.classList.toggle("on", S.mixMode);
+        el.mixBtn.classList.toggle("sel", S.mixMode);
+        el.sfill.style.width = S.volume + "%";
+        el.sthumb.style.left = S.volume + "%";
+        el.vlbl.textContent = S.volume;
+        buildCells();
+        syncColors();
+      })();
+    </script>
+  </body>
+</html>
