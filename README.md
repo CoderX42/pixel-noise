@@ -40,12 +40,19 @@
 
 更完整的设计规范见 [`ui/Antigravity/design-spec-v2.md`](ui/Antigravity/design-spec-v2.md)。
 
+**给 AI / 协作者的提示词（Markdown）：**
+
+- [实现规格（页面与工程）](docs/prompts/implementation.md)
+- [UI/UX 设计约束与动效](docs/prompts/ui-ux-design.md)
+
 ---
 
 ## 仓库结构（摘要）
 
 ```
 PixelNoise/
+├── docs/
+│   └── prompts/              # 实现与 UI/UX 提示词（供复用或喂给 AI）
 ├── index.html                # 根路径入口，跳转至 ui/PixelNoise.html（便于 GitHub Pages）
 ├── README.md                 # 本说明
 ├── CLAUDE.md                 # 面向 AI/协作的开发说明
