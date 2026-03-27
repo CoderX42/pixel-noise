@@ -93,5 +93,5 @@
 ## 参考文件
 
 - 详细网格与组件尺寸：[`ui/Antigravity/design-spec-v2.md`](../../ui/Antigravity/design-spec-v2.md)
-- 实现对照：[`ui/PixelNoise.html`](../../ui/PixelNoise.html)
+- 实现对照：[`index.html`](../../index.html)（正式入口；[`ui/PixelNoise.html`](../../ui/PixelNoise.html) 为旧链接跳转）
 - 前端审美通用原则（非本项目专用）：[`frontend-design/SKILL.md`](../../frontend-design/SKILL.md)

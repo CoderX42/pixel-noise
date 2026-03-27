@@ -1,6 +1,6 @@
 # PixelNoise 实现提示词（页面 / 工程）
 
-将下列内容作为对 AI 或协作者的**实现规格说明**，目标文件以 **[`ui/PixelNoise.html`](../../ui/PixelNoise.html)** 为主（单文件 HTML，内联 CSS + JS）。
+将下列内容作为对 AI 或协作者的**实现规格说明**。**正式入口**为仓库根目录 **[`index.html`](../../index.html)**（单文件 HTML，内联 CSS + JS）。部署到 GitHub Pages 时根路径即可访问、**地址栏无 `.html`**。旧路径 `ui/PixelNoise.html` 仅作跳转页。
 
 ---
 
@@ -12,7 +12,7 @@
 
 ## 技术约束
 
-- **单文件交付**：`PixelNoise.html` 内完成结构、样式、脚本，无构建步骤。
+- **单文件交付**：根目录 `index.html` 内完成结构、样式、脚本，无构建步骤。
 - **禁止**引用本地/远程 **音频资源**（wav/mp3 等）；允许 **Google Fonts**（如 Silkscreen、VT323）。
 - **持久化**：`localStorage`（如键 `pxn5_v3`）保存 `sound`、`mixSounds`、`volume`、`theme`、`mixMode` 等。
 - **画布**：按视口计算逻辑格网（如 `PX=4`，`CW/CH = ceil(inner/4)`），主循环约 **30fps**。
