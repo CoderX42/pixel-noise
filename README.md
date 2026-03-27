@@ -44,10 +44,6 @@
 
 - [实现规格（页面与工程）](docs/prompts/implementation.md)
 - [UI/UX 设计约束与动效](docs/prompts/ui-ux-design.md)
-- **像素每日迷宫（规划）**  
-  - [业务逻辑文档](docs/pixel-maze/BUSINESS-LOGIC.md)  
-  - [算法与实现要点](docs/prompts/pixel-maze-daily.md)  
-  - [AI IDE 原型生成提示词](docs/prompts/pixel-maze-ide-prototype.md)（复制其中 `BEGIN_PROMPT`～`END_PROMPT`）
 
 ---
 
@@ -56,8 +52,7 @@
 ```
 PixelNoise/
 ├── docs/
-│   ├── pixel-maze/           # 像素每日迷宫 · 业务逻辑
-│   └── prompts/              # 实现 / UI/UX / 迷宫 / IDE 原型提示词
+│   └── prompts/              # 实现与 UI/UX 提示词
 ├── index.html                # 正式应用（GitHub Pages 根路径无 .html 后缀）
 ├── README.md                 # 本说明
 ├── CLAUDE.md                 # 面向 AI/协作的开发说明
